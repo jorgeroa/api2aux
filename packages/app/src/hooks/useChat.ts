@@ -120,10 +120,19 @@ async function executeToolCall(
   return fetchWithAuth(apiUrl)
 }
 
+// LLM-format history that preserves tool_calls and tool responses.
+// Reset when clearMessages is called (tracked via messages.length === 0).
+let llmHistory: ChatMessage[] = []
+
 export function useChat() {
   const url = useAppStore((s) => s.url)
   const parsedSpec = useAppStore((s) => s.parsedSpec)
   const { messages, addMessage, updateMessage, clearMessages, config, sending, setSending } = useChatStore()
+
+  // Reset LLM history when messages are cleared
+  if (messages.length === 0 && llmHistory.length > 0) {
+    llmHistory = []
+  }
 
   const sendMessage = useCallback(async (text: string) => {
     if (!text.trim() || !url || sending) return
@@ -167,22 +176,14 @@ export function useChat() {
 
       const systemPrompt = buildSystemPrompt(url, parsedSpec)
 
-      // Build conversation history for LLM
+      // Add the new user message to LLM history
+      llmHistory.push({ role: 'user', content: text.trim() })
+
+      // Build full message array with system prompt
       const llmMessages: ChatMessage[] = [
         { role: 'system', content: systemPrompt },
+        ...llmHistory,
       ]
-
-      // Add previous messages (skip tool-result UI messages, they're in the LLM history as tool messages)
-      for (const m of messages) {
-        if (m.role === 'user') {
-          llmMessages.push({ role: 'user', content: m.text || '' })
-        } else if (m.role === 'assistant' && m.text) {
-          llmMessages.push({ role: 'assistant', content: m.text })
-        }
-      }
-
-      // Add the new user message
-      llmMessages.push({ role: 'user', content: text.trim() })
 
       // Call LLM
       const response = await chatCompletion(llmMessages, tools, config)
@@ -196,6 +197,13 @@ export function useChat() {
         const toolCall = assistantMessage.tool_calls[0]!
         const toolArgs = JSON.parse(toolCall.function.arguments)
 
+        // Track assistant tool_call in LLM history
+        llmHistory.push({
+          role: 'assistant',
+          content: null,
+          tool_calls: assistantMessage.tool_calls,
+        })
+
         // Update assistant message to show tool call
         updateMessage(assistantId, {
           text: `Calling ${toolCall.function.name}...`,
@@ -208,6 +216,12 @@ export function useChat() {
         try {
           toolResult = await executeToolCall(toolCall.function.name, toolArgs, url)
         } catch (err) {
+          // Track error in LLM history so it stays consistent
+          llmHistory.push({
+            role: 'tool',
+            content: `Error: ${err instanceof Error ? err.message : String(err)}`,
+            tool_call_id: toolCall.id,
+          })
           updateMessage(assistantId, {
             text: `API call failed: ${err instanceof Error ? err.message : String(err)}`,
             loading: false,
@@ -232,33 +246,37 @@ export function useChat() {
         }
         addMessage(toolResultMsg)
 
-        // Send tool result back to LLM for summarization
+        // Track tool result in LLM history
         const truncatedResult = JSON.stringify(toolResult).slice(0, 8000)
+        llmHistory.push({
+          role: 'tool',
+          content: truncatedResult,
+          tool_call_id: toolCall.id,
+        })
+
+        // Send full history (now includes tool_calls + tool response) for summarization
         const followUpMessages: ChatMessage[] = [
-          ...llmMessages,
-          {
-            role: 'assistant',
-            content: null,
-            tool_calls: assistantMessage.tool_calls,
-          },
-          {
-            role: 'tool',
-            content: truncatedResult,
-            tool_call_id: toolCall.id,
-          },
+          { role: 'system', content: systemPrompt },
+          ...llmHistory,
         ]
 
         const followUp = await chatCompletion(followUpMessages, tools, config)
         const followUpChoice = followUp.choices[0]
+        const followUpText = followUpChoice?.message?.content || 'Done.'
+
+        // Track the follow-up response in LLM history
+        llmHistory.push({ role: 'assistant', content: followUpText })
 
         updateMessage(assistantId, {
-          text: followUpChoice?.message?.content || 'Done.',
+          text: followUpText,
           loading: false,
         })
       } else {
         // No tool call — just a text response
+        const responseText = assistantMessage.content || ''
+        llmHistory.push({ role: 'assistant', content: responseText })
         updateMessage(assistantId, {
-          text: assistantMessage.content || '',
+          text: responseText,
           loading: false,
         })
       }

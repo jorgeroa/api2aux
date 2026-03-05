@@ -56,6 +56,15 @@ export function TableRenderer({ data, schema, path, depth }: RendererProps) {
     schema.kind === 'array' ? schema.items : schema, path, data, schema
   )
 
+  // All hooks must be called before any early returns (React Rules of Hooks)
+  const dataArray = Array.isArray(data) ? data : []
+  const paginationConfig = getPaginationConfig(path, 20)
+  const pagination = usePagination({
+    totalItems: dataArray.length,
+    itemsPerPage: paginationConfig.itemsPerPage,
+    currentPage: paginationConfig.currentPage,
+  })
+
   // Listen for cross-navigation events from ConfigPanel
   useEffect(() => {
     const handler = (e: Event) => {
@@ -111,14 +120,6 @@ export function TableRenderer({ data, schema, path, depth }: RendererProps) {
   if (schema.items.kind !== 'object') {
     return <div className="text-red-500">TableRenderer expects array of objects</div>
   }
-
-  // Pagination state
-  const paginationConfig = getPaginationConfig(path, 20)
-  const pagination = usePagination({
-    totalItems: data.length,
-    itemsPerPage: paginationConfig.itemsPerPage,
-    currentPage: paginationConfig.currentPage,
-  })
 
   const paginatedData = data.slice(pagination.firstIndex, pagination.lastIndex)
 
