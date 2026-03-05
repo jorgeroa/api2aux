@@ -4,6 +4,7 @@ import { toast } from 'sonner'
 import { useAppStore } from '../store/appStore'
 import { useAuthStore } from '../store/authStore'
 import { parseUrlParameters } from '../services/urlParser/parser'
+import { deployAsMcpServer, type DeployResult } from '../services/mcp/deploy'
 import type { Credential } from '../types/auth'
 
 type ExportFormat = 'claude-desktop' | 'claude-code' | 'cli'
@@ -215,8 +216,12 @@ function ChevronIcon({ open }: { open: boolean }) {
 export function MCPExportDialog({ open, onClose }: MCPExportDialogProps) {
   const url = useAppStore((s) => s.url)
   const data = useAppStore((s) => s.data)
+  const parsedSpec = useAppStore((s) => s.parsedSpec)
   const analysisCache = useAppStore((s) => s.analysisCache)
   const [format, setFormat] = useState<ExportFormat>('claude-desktop')
+  const [deploying, setDeploying] = useState(false)
+  const [deployResult, setDeployResult] = useState<DeployResult | null>(null)
+  const [deployError, setDeployError] = useState<string | null>(null)
 
   const toolInfo = useMemo(() => {
     if (!url) return null
@@ -284,6 +289,37 @@ export function MCPExportDialog({ open, onClose }: MCPExportDialogProps) {
   const exportConfigText = generateExportConfig(format, url, toolInfo.serverName, toolInfo.authArgs)
   const instructions = getInstructions(format)
 
+  const handleDeploy = async () => {
+    if (!parsedSpec) return
+    setDeploying(true)
+    setDeployError(null)
+    try {
+      const authStore = useAuthStore.getState()
+      const cred = authStore.getActiveCredential(url)
+      const authType = cred
+        ? cred.type === 'bearer' ? 'bearer' as const
+        : cred.type === 'apiKey' ? 'header' as const
+        : cred.type === 'queryParam' ? 'apikey' as const
+        : 'none' as const
+        : 'none' as const
+      const result = await deployAsMcpServer({
+        apiUrl: parsedSpec.baseUrl,
+        baseUrl: parsedSpec.baseUrl,
+        name: toolInfo.serverName,
+        authType,
+        authParamName: cred?.type === 'apiKey' ? cred.headerName : cred?.type === 'queryParam' ? cred.paramName : undefined,
+        operations: parsedSpec.operations,
+      })
+      setDeployResult(result)
+      toast.success('Deployed as MCP server')
+    } catch (err) {
+      setDeployError(err instanceof Error ? err.message : 'Deployment failed')
+      toast.error('Deployment failed')
+    } finally {
+      setDeploying(false)
+    }
+  }
+
   const formats: Array<{ value: ExportFormat; label: string }> = [
     { value: 'claude-desktop', label: 'Claude Desktop' },
     { value: 'claude-code', label: 'Claude Code' },
@@ -319,6 +355,9 @@ export function MCPExportDialog({ open, onClose }: MCPExportDialogProps) {
               </Tab>
               <Tab className="px-3 py-2 text-sm font-medium text-muted-foreground data-selected:text-foreground data-selected:border-b-2 data-selected:border-primary -mb-px outline-none transition-colors hover:text-foreground">
                 Export
+              </Tab>
+              <Tab className="px-3 py-2 text-sm font-medium text-muted-foreground data-selected:text-foreground data-selected:border-b-2 data-selected:border-primary -mb-px outline-none transition-colors hover:text-foreground">
+                Hosted
               </Tab>
             </TabList>
 
@@ -455,6 +494,93 @@ export function MCPExportDialog({ open, onClose }: MCPExportDialogProps) {
                   <p className="text-xs text-amber-500 shrink-0">
                     This config includes your API credentials. Keep it private.
                   </p>
+                )}
+              </TabPanel>
+
+              {/* Hosted Tab */}
+              <TabPanel className="px-6 py-4 flex flex-col gap-4">
+                <p className="text-sm text-muted-foreground">
+                  Deploy this API as a hosted MCP server. External clients connect via Streamable HTTP — no local install needed.
+                </p>
+
+                {!parsedSpec ? (
+                  <p className="text-sm text-muted-foreground italic">
+                    This API needs an OpenAPI spec to deploy as hosted MCP. Raw URL APIs are not yet supported.
+                  </p>
+                ) : !deployResult ? (
+                  <div className="space-y-3">
+                    <button
+                      onClick={handleDeploy}
+                      disabled={deploying}
+                      className="px-4 py-2 bg-primary text-primary-foreground rounded-lg text-sm font-medium hover:bg-primary/90 transition-colors disabled:opacity-50"
+                    >
+                      {deploying ? 'Deploying...' : 'Deploy as MCP Server'}
+                    </button>
+                    {deployError && (
+                      <p className="text-sm text-red-500">{deployError}</p>
+                    )}
+                  </div>
+                ) : (
+                  <div className="space-y-4">
+                    <div className="bg-green-500/10 border border-green-500/30 rounded-lg p-3">
+                      <p className="text-sm text-green-600 dark:text-green-400 font-medium mb-1">Deployed successfully</p>
+                      <p className="text-xs text-muted-foreground">Expires: {new Date(deployResult.expiresAt).toLocaleDateString()}</p>
+                    </div>
+
+                    <div>
+                      <label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">MCP URL</label>
+                      <div className="flex gap-2 mt-1">
+                        <code className="flex-1 bg-muted rounded-lg px-3 py-2 text-xs font-mono break-all">
+                          {deployResult.mcpUrl}
+                        </code>
+                        <button
+                          onClick={() => handleCopy(deployResult.mcpUrl, 'MCP URL')}
+                          className="px-3 py-2 text-xs bg-background border border-border rounded-lg hover:bg-muted transition-colors shrink-0"
+                        >
+                          Copy
+                        </button>
+                      </div>
+                    </div>
+
+                    <div className="space-y-2">
+                      <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Connect from</p>
+
+                      <div className="bg-muted rounded-lg p-3 space-y-2">
+                        <p className="text-xs font-medium text-foreground">Claude Code</p>
+                        <code className="block text-xs font-mono text-muted-foreground break-all">
+                          claude mcp add --transport http {toolInfo.serverName} {deployResult.mcpUrl}
+                        </code>
+                        <button
+                          onClick={() => handleCopy(`claude mcp add --transport http ${toolInfo.serverName} ${deployResult.mcpUrl}`, 'Claude Code command')}
+                          className="text-xs text-primary hover:underline"
+                        >
+                          Copy command
+                        </button>
+                      </div>
+
+                      <div className="bg-muted rounded-lg p-3 space-y-2">
+                        <p className="text-xs font-medium text-foreground">Claude Desktop / Cursor</p>
+                        <pre className="text-xs font-mono text-muted-foreground break-all whitespace-pre-wrap">
+{JSON.stringify({ [toolInfo.serverName]: { url: deployResult.mcpUrl } }, null, 2)}
+                        </pre>
+                        <button
+                          onClick={() => handleCopy(JSON.stringify({ [toolInfo.serverName]: { url: deployResult.mcpUrl } }, null, 2), 'Config')}
+                          className="text-xs text-primary hover:underline"
+                        >
+                          Copy config
+                        </button>
+                      </div>
+                    </div>
+
+                    {toolInfo.cred && (
+                      <p className="text-xs text-amber-500">
+                        This API requires authentication. Pass your API key as a header when connecting:
+                        <code className="block mt-1 bg-muted px-2 py-1 rounded text-foreground">
+                          --header &quot;X-Forwarded-Api-Key: YOUR_KEY&quot;
+                        </code>
+                      </p>
+                    )}
+                  </div>
                 )}
               </TabPanel>
             </TabPanels>
