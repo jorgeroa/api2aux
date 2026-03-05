@@ -10,6 +10,7 @@ import type { TenantStore } from './types'
 import { health } from './routes/health'
 import { register } from './routes/register'
 import { tenant } from './routes/tenant'
+import { catalog } from './routes/catalog'
 
 export type AppEnv = {
   Variables: {
@@ -38,6 +39,7 @@ export function createApp(store: TenantStore) {
   app.route('/', health)
   app.route('/', register)
   app.route('/', tenant)
+  app.route('/', catalog)
 
   return app
 }
