@@ -34,7 +34,7 @@ export function Sidebar({ parsedSpec, selectedIndex, onSelect }: SidebarProps) {
   return (
     <nav
       aria-label="API endpoints"
-      className="w-64 border-r border-border bg-card overflow-y-auto shrink-0 h-screen"
+      className="w-64 border-r border-border bg-card overflow-y-auto shrink-0 h-screen sticky top-0"
     >
       {/* Sidebar header */}
       <div className="p-4 border-b border-border">

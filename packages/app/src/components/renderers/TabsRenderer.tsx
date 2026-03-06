@@ -71,9 +71,9 @@ export function TabsRenderer({ data, schema, path, depth }: RendererProps) {
           )}
           <div className="grid grid-cols-2 @md:grid-cols-3 gap-3">
             {primitiveFields.map(([name, def]) => (
-              <div key={name} className="min-w-0">
+              <div key={name} className="min-w-0 overflow-hidden">
                 <div className="text-xs text-muted-foreground font-medium truncate">{formatLabel(name)}</div>
-                <div className="mt-0.5 min-w-0">
+                <div className="mt-0.5 min-w-0 overflow-hidden text-ellipsis">
                   <PrimitiveRenderer
                     data={obj[name]}
                     schema={def.type}
