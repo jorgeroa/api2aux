@@ -1,21 +1,19 @@
 import { useEffect } from 'react'
-import { useTheme } from 'next-themes'
 import { useConfigStore } from '../../store/configStore'
 import { useAppStore } from '../../store/appStore'
 
 /**
  * Invisible component that syncs configuration store state to DOM.
- * Uses next-themes for theme class management and applies CSS custom properties.
+ * Sets theme class directly on <html> and applies CSS custom properties.
  */
 export function ThemeApplier() {
   const { globalTheme, styleOverrides, endpointOverrides } = useConfigStore()
   const { parsedSpec, selectedOperationIndex } = useAppStore()
-  const { setTheme } = useTheme()
 
-  // Sync config store theme to next-themes
+  // Apply theme class directly to <html>
   useEffect(() => {
-    setTheme(globalTheme)
-  }, [globalTheme, setTheme])
+    document.documentElement.className = globalTheme
+  }, [globalTheme])
 
   // Apply style overrides (global + endpoint-specific merged)
   useEffect(() => {
