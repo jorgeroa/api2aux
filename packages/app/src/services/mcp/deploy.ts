@@ -5,7 +5,7 @@
 
 import type { ParsedOperation, ParsedSpec } from '@api2aux/semantic-analysis'
 
-const MCP_WORKER_URL = import.meta.env.VITE_MCP_WORKER_URL || 'http://localhost:8787'
+const MCP_WORKER_URL = import.meta.env.VITE_MCP_WORKER_URL || 'https://api2aux-mcp.jgt-992.workers.dev'
 
 export interface DeployConfig {
   apiUrl: string
