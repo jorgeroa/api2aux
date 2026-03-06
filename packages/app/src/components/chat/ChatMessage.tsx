@@ -1,5 +1,7 @@
 import type { UIMessage, ToolResultEntry } from '../../services/llm/types'
 import { useAppStore } from '../../store/appStore'
+import { useParameterStore } from '../../store/parameterStore'
+import { generateToolName } from '@api2aux/tool-utils'
 import { inferSchema } from '../../services/schema/inferrer'
 
 interface ChatMessageProps {
@@ -34,12 +36,49 @@ function friendlyLabel(entry: ToolResultEntry): string {
   return `${resource}${countInfo}`
 }
 
-function ToolResultLinks({ results }: { results: ToolResultEntry[] }) {
+function ToolResultLinks({ results, contextText }: { results: ToolResultEntry[], contextText?: string }) {
   const url = useAppStore((s) => s.url)
 
   const handleClick = (entry: ToolResultEntry) => {
+    // Sync operation selector + parameter chips in the UI
+    const { parsedSpec } = useAppStore.getState()
+    if (parsedSpec && entry.toolName) {
+      const opIndex = parsedSpec.operations.findIndex(op => generateToolName(op) === entry.toolName)
+      if (opIndex >= 0) {
+        const operation = parsedSpec.operations[opIndex]!
+        // Set index directly — don't use setSelectedOperation which clears data/schema
+        useAppStore.setState({ selectedOperationIndex: opIndex })
+        const endpoint = `${parsedSpec.baseUrl}${operation.path}`
+        const paramValues: Record<string, string> = {}
+        for (const [key, value] of Object.entries(entry.toolArgs)) {
+          if (value !== undefined && value !== '') paramValues[key] = String(value)
+        }
+        if (Object.keys(paramValues).length > 0) {
+          useParameterStore.getState().setValues(endpoint, paramValues)
+        }
+      }
+    }
+
     const schema = inferSchema(entry.data, url || '')
     useAppStore.getState().fetchSuccess(entry.data, schema)
+
+    // Auto-select the most relevant tab based on the surrounding message text
+    if (contextText && entry.data && typeof entry.data === 'object' && !Array.isArray(entry.data)) {
+      const fields = Object.entries(entry.data as Record<string, unknown>)
+        .filter(([, v]) => v !== null && typeof v === 'object')
+        .map(([k]) => k)
+      if (fields.length >= 2) {
+        const tokenize = (s: string) =>
+          s.toLowerCase().replace(/([a-z])([A-Z])/g, '$1 $2').split(/[\s_\-/]+/).filter(w => w.length > 2)
+        const words = new Set(tokenize(contextText))
+        let bestIdx = 0, bestScore = 0
+        for (let i = 0; i < fields.length; i++) {
+          const score = tokenize(fields[i]!).reduce((s, w) => s + (words.has(w) ? 1 : 0), 0)
+          if (score > bestScore) { bestScore = score; bestIdx = i }
+        }
+        if (bestScore > 0) useAppStore.getState().setTabSelection('$', bestIdx)
+      }
+    }
 
     // Scroll the data into view and flash highlight after React commits
     setTimeout(() => {
@@ -110,8 +149,8 @@ export function ChatMessage({ message }: ChatMessageProps) {
         ) : (
           <>
             <span className="whitespace-pre-wrap">{message.text}</span>
-            {message.toolResults && message.toolResults.length > 1 && (
-              <ToolResultLinks results={message.toolResults} />
+            {message.toolResults && message.toolResults.length > 0 && (
+              <ToolResultLinks results={message.toolResults} contextText={message.text || undefined} />
             )}
           </>
         )}

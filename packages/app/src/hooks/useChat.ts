@@ -12,6 +12,7 @@ import { useChatStore } from '../store/chatStore'
 import { chatCompletion } from '../services/llm/client'
 import { buildToolsFromUrl, buildToolsFromSpec, buildSystemPrompt } from '../services/llm/toolBuilder'
 import { generateToolName } from '@api2aux/tool-utils'
+import { useParameterStore } from '../store/parameterStore'
 import { fetchWithAuth } from '../services/api/fetcher'
 import { inferSchema } from '../services/schema/inferrer'
 import type { ChatMessage, UIMessage, Tool, ToolResultEntry } from '../services/llm/types'
@@ -115,6 +116,70 @@ async function executeToolCall(
 
   // Fallback: just call the base URL
   return fetchWithAuth(apiUrl)
+}
+
+/** Sync the UI operation selector + parameter chips to reflect a chat tool call.
+ *  Sets selectedOperationIndex without clearing data (unlike setSelectedOperation). */
+function syncOperationUI(toolName: string, toolArgs: Record<string, unknown>) {
+  const state = useAppStore.getState()
+  const { parsedSpec } = state
+  if (!parsedSpec) return
+
+  const opIndex = parsedSpec.operations.findIndex(op => generateToolName(op) === toolName)
+  if (opIndex < 0) return
+
+  // Set index directly — don't use setSelectedOperation which clears data/schema
+  useAppStore.setState({ selectedOperationIndex: opIndex })
+
+  // Set parameter values so filter chips and URL preview appear
+  const operation = parsedSpec.operations[opIndex]!
+  const endpoint = `${parsedSpec.baseUrl}${operation.path}`
+  const paramValues: Record<string, string> = {}
+  for (const [key, value] of Object.entries(toolArgs)) {
+    if (value !== undefined && value !== '') {
+      paramValues[key] = String(value)
+    }
+  }
+  if (Object.keys(paramValues).length > 0) {
+    useParameterStore.getState().setValues(endpoint, paramValues)
+  }
+}
+
+/** Auto-select the tab whose name best matches the LLM response text */
+function autoSelectTab(data: unknown, responseText: string) {
+  if (!data || typeof data !== 'object' || Array.isArray(data)) return
+
+  // Extract nested (non-primitive) field names — these become tab names
+  const fields = Object.entries(data as Record<string, unknown>)
+    .filter(([, v]) => v !== null && typeof v === 'object')
+    .map(([k]) => k)
+
+  if (fields.length < 2) return // no tabs or only one tab — nothing to select
+
+  // Tokenize: split camelCase/snake_case into lowercase words
+  const tokenize = (s: string) =>
+    s.toLowerCase()
+      .replace(/([a-z])([A-Z])/g, '$1 $2')
+      .split(/[\s_\-/]+/)
+      .filter(w => w.length > 2)
+
+  const responseWords = new Set(tokenize(responseText))
+
+  let bestIndex = 0
+  let bestScore = 0
+
+  for (let i = 0; i < fields.length; i++) {
+    const tabWords = tokenize(fields[i]!)
+    const score = tabWords.reduce((sum, w) => sum + (responseWords.has(w) ? 1 : 0), 0)
+    if (score > bestScore) {
+      bestScore = score
+      bestIndex = i
+    }
+  }
+
+  if (bestScore > 0) {
+    useAppStore.getState().setTabSelection('$', bestIndex)
+  }
 }
 
 // LLM-format history that preserves tool_calls and tool responses.
@@ -237,6 +302,9 @@ export function useChat() {
             continue
           }
 
+          // Sync operation selection + parameter values so the UI shows what was called
+          syncOperationUI(toolCall.function.name, toolArgs)
+
           // Push result to main view (last successful call wins)
           const toolSchema = inferSchema(toolResult, url)
           useAppStore.getState().fetchSuccess(toolResult, toolSchema)
@@ -284,9 +352,15 @@ export function useChat() {
       updateMessage(assistantId, {
         text: responseText,
         loading: false,
-        // Attach all tool results so the user can click to view any of them
-        ...(collectedResults.length > 1 ? { toolResults: collectedResults } : {}),
+        // Attach tool results so the user can click to view them
+        ...(collectedResults.length > 0 ? { toolResults: collectedResults } : {}),
       })
+
+      // Auto-select the most relevant tab based on the LLM response text
+      if (collectedResults.length > 0) {
+        const lastData = collectedResults[collectedResults.length - 1]!.data
+        autoSelectTab(lastData, responseText)
+      }
     } catch (err) {
       updateMessage(assistantId, {
         text: `Error: ${err instanceof Error ? err.message : String(err)}`,
