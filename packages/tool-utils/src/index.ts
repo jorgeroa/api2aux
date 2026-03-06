@@ -115,8 +115,115 @@ export function sanitizeToolName(name: string): string {
 }
 
 /**
+ * Summarize a JSON Schema response DTO into a compact, LLM-friendly string.
+ * Includes field names, types, descriptions, enums, and nested structure.
+ * Returns null if schema has no useful structure.
+ *
+ * Example output:
+ *   "{ index: string, name: string, desc: string[] (Full description), level: integer, class: { index, name, url } }"
+ */
+export function summarizeResponseSchema(schema: unknown, depth = 0): string | null {
+  if (!schema || typeof schema !== 'object' || depth > 3) return null
+
+  const s = schema as Record<string, unknown>
+
+  // Handle combiners
+  for (const combiner of ['allOf', 'oneOf', 'anyOf']) {
+    if (Array.isArray(s[combiner])) {
+      for (const sub of s[combiner] as unknown[]) {
+        const result = summarizeResponseSchema(sub, depth)
+        if (result) return result
+      }
+    }
+  }
+
+  // Array of objects
+  if (s.type === 'array' && s.items && typeof s.items === 'object') {
+    const itemSummary = summarizeResponseSchema(s.items, depth)
+    if (itemSummary) return `${itemSummary}[]`
+    return null
+  }
+
+  // Object with properties — the main case
+  if (s.type === 'object' && s.properties && typeof s.properties === 'object') {
+    const props = s.properties as Record<string, Record<string, unknown>>
+    const entries = Object.entries(props)
+    if (entries.length === 0) return null
+
+    // Unwrap list wrappers (e.g. { count, results: [{...}] })
+    if (entries.length <= 4 && depth === 0) {
+      for (const [, prop] of entries) {
+        if (prop.type === 'array' && prop.items && typeof prop.items === 'object') {
+          const items = prop.items as Record<string, unknown>
+          if (items.properties) {
+            const inner = summarizeResponseSchema(prop, depth)
+            if (inner) return inner
+          }
+        }
+      }
+    }
+
+    const fieldStrs: string[] = []
+    for (const [name, prop] of entries) {
+      fieldStrs.push(summarizeProperty(name, prop, depth))
+    }
+
+    // Cap fields to keep it reasonable
+    const max = depth === 0 ? 20 : 6
+    if (fieldStrs.length > max) {
+      const shown = fieldStrs.slice(0, max)
+      shown.push(`+${fieldStrs.length - max} more`)
+      return `{ ${shown.join(', ')} }`
+    }
+
+    return `{ ${fieldStrs.join(', ')} }`
+  }
+
+  return null
+}
+
+/**
+ * Summarize a single property into a compact string.
+ */
+function summarizeProperty(name: string, prop: Record<string, unknown>, depth: number): string {
+  const type = prop.type as string | undefined
+  const desc = prop.description as string | undefined
+  const enumVals = prop.enum as unknown[] | undefined
+
+  // Nested object
+  if (type === 'object' && prop.properties) {
+    const nested = summarizeResponseSchema(prop, depth + 1)
+    if (nested) return `${name}: ${nested}`
+  }
+
+  // Array
+  if (type === 'array' && prop.items && typeof prop.items === 'object') {
+    const items = prop.items as Record<string, unknown>
+    if (items.properties) {
+      const nested = summarizeResponseSchema(items, depth + 1)
+      if (nested) return `${name}: ${nested}[]`
+    }
+    const itemType = items.type as string | undefined
+    return `${name}: ${itemType || 'any'}[]`
+  }
+
+  // Simple field
+  let str = `${name}: ${type || 'any'}`
+
+  // Add enum values if small
+  if (enumVals && enumVals.length <= 6) {
+    str += ` (${enumVals.join('|')})`
+  } else if (desc && desc.length <= 60) {
+    // Add short description
+    str += ` (${desc})`
+  }
+
+  return str
+}
+
+/**
  * Build a human-readable description for a tool from operation metadata.
- * Includes summary/description, tags, and response field names.
+ * Includes summary/description, tags, and response DTO schema.
  *
  * @param opts.includePath - Add "METHOD /path" after summary (useful for LLM chat context)
  */
@@ -140,12 +247,19 @@ export function generateDescription(op: ToolOperation, opts?: DescriptionOptions
     parts.push(`Tags: ${op.tags.join(', ')}`)
   }
 
-  const fields = extractResponseFields(op.responseSchema)
-  if (fields && fields.length > 0) {
-    const displayed = fields.length > 15
-      ? [...fields.slice(0, 15), `+${fields.length - 15} more`]
-      : fields
-    parts.push(`Returns: ${displayed.join(', ')}`)
+  // Include full DTO schema summary for LLM context
+  const dtoSummary = summarizeResponseSchema(op.responseSchema)
+  if (dtoSummary) {
+    parts.push(`Returns: ${dtoSummary}`)
+  } else {
+    // Fall back to field names only
+    const fields = extractResponseFields(op.responseSchema)
+    if (fields && fields.length > 0) {
+      const displayed = fields.length > 15
+        ? [...fields.slice(0, 15), `+${fields.length - 15} more`]
+        : fields
+      parts.push(`Returns: ${displayed.join(', ')}`)
+    }
   }
 
   return parts.join(' | ')
