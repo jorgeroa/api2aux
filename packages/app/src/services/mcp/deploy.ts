@@ -52,6 +52,33 @@ export async function deployAsMcpServer(config: DeployConfig): Promise<DeployRes
 }
 
 /**
+ * Find an existing deployment for a given API URL.
+ */
+export async function findExistingDeployment(apiUrl: string): Promise<DeployResult | null> {
+  try {
+    const response = await fetch(`${MCP_WORKER_URL}/tenants`, {
+      signal: AbortSignal.timeout(5000),
+    })
+    if (!response.ok) return null
+
+    const data = await response.json() as {
+      tenants: Array<{ tenantId: string; apiUrl: string; mcpUrl: string; expiresAt: string }>
+    }
+
+    const match = data.tenants.find(t => t.apiUrl === apiUrl)
+    if (!match) return null
+
+    return {
+      tenantId: match.tenantId,
+      mcpUrl: match.mcpUrl,
+      expiresAt: match.expiresAt,
+    }
+  } catch {
+    return null
+  }
+}
+
+/**
  * Build a DeployConfig from a parsed OpenAPI spec.
  */
 export function buildDeployConfig(spec: ParsedSpec, authType: 'none' | 'bearer' | 'header' | 'apikey' = 'none'): DeployConfig {

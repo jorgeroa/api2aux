@@ -1,10 +1,10 @@
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useEffect } from 'react'
 import { Dialog, DialogPanel, DialogTitle, Disclosure, DisclosureButton, DisclosurePanel, Tab, TabGroup, TabList, TabPanel, TabPanels } from '@headlessui/react'
 import { toast } from 'sonner'
 import { useAppStore } from '../store/appStore'
 import { useAuthStore } from '../store/authStore'
 import { parseUrlParameters } from '../services/urlParser/parser'
-import { deployAsMcpServer } from '../services/mcp/deploy'
+import { deployAsMcpServer, findExistingDeployment } from '../services/mcp/deploy'
 import type { Credential } from '../types/auth'
 import type { ParsedOperation } from '@api2aux/semantic-analysis'
 import { generateToolName, generateDescription } from '@api2aux/tool-utils'
@@ -233,6 +233,14 @@ export function MCPExportDialog({ open, onClose }: MCPExportDialogProps) {
   const deployResult = useAppStore((s) => s.mcpDeployResult)
   const setDeployResult = useAppStore((s) => s.setMcpDeployResult)
   const [deployError, setDeployError] = useState<string | null>(null)
+
+  // Check for existing deployment when dialog opens
+  useEffect(() => {
+    if (!open || deployResult || !parsedSpec) return
+    findExistingDeployment(parsedSpec.baseUrl).then((existing) => {
+      if (existing) setDeployResult(existing)
+    })
+  }, [open, parsedSpec?.baseUrl])
 
   const toolInfo = useMemo(() => {
     if (!url) return null
@@ -731,6 +739,13 @@ export function MCPExportDialog({ open, onClose }: MCPExportDialogProps) {
                         </code>
                       </p>
                     )}
+
+                    <button
+                      onClick={() => { setDeployResult(null); setDeployError(null) }}
+                      className="text-xs text-muted-foreground hover:text-foreground transition-colors"
+                    >
+                      Redeploy with updated operations
+                    </button>
                   </div>
                 )}
               </TabPanel>
