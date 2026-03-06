@@ -11,6 +11,7 @@ import { useAppStore } from '../store/appStore'
 import { useChatStore } from '../store/chatStore'
 import { chatCompletion } from '../services/llm/client'
 import { buildToolsFromUrl, buildToolsFromSpec, buildSystemPrompt } from '../services/llm/toolBuilder'
+import { generateToolName } from '@api2aux/tool-utils'
 import { fetchWithAuth } from '../services/api/fetcher'
 import { inferSchema } from '../services/schema/inferrer'
 import type { ChatMessage, UIMessage, Tool, ToolResultEntry } from '../services/llm/types'
@@ -83,13 +84,9 @@ async function executeToolCall(
   // Find the matching operation from parsedSpec
   const parsedSpec = useAppStore.getState().parsedSpec
   if (parsedSpec) {
-    const operation = parsedSpec.operations.find(op => {
-      const sanitized = (op.operationId || `${op.method}_${op.path}`)
-        .replace(/[^a-zA-Z0-9_-]/g, '_')
-        .replace(/_+/g, '_')
-        .replace(/^_|_$/g, '')
-      return sanitized === toolName
-    })
+    const operation = parsedSpec.operations.find(op =>
+      generateToolName(op) === toolName
+    )
 
     if (operation) {
       let path = operation.path

@@ -29,8 +29,9 @@ import type {
 } from './types'
 
 /**
- * Extract top-level field names from a JSON Schema response schema.
- * Handles object, array-of-objects, and allOf/oneOf/anyOf combiners.
+ * Extract meaningful field names from a JSON Schema response schema.
+ * Unwraps common list-wrapper patterns like { count, results: [{...items}] }
+ * to return the actual entity/DTO fields, not the pagination wrapper.
  */
 export function extractResponseFields(schema: unknown): string[] | null {
   if (!schema || typeof schema !== 'object') return null
@@ -38,7 +39,25 @@ export function extractResponseFields(schema: unknown): string[] | null {
   const s = schema as Record<string, unknown>
 
   if (s.type === 'object' && s.properties && typeof s.properties === 'object') {
-    return Object.keys(s.properties as Record<string, unknown>)
+    const props = s.properties as Record<string, Record<string, unknown>>
+    const keys = Object.keys(props)
+
+    // Unwrap list wrappers: if the object has few top-level fields and one is
+    // an array-of-objects, return the array item fields (the actual DTO).
+    // e.g. { count: number, results: [{ index, name, url }] } → [index, name, url]
+    if (keys.length <= 4) {
+      for (const key of keys) {
+        const prop = props[key]
+        if (prop && prop.type === 'array' && prop.items && typeof prop.items === 'object') {
+          const items = prop.items as Record<string, unknown>
+          if (items.properties && typeof items.properties === 'object') {
+            return Object.keys(items.properties as Record<string, unknown>)
+          }
+        }
+      }
+    }
+
+    return keys
   }
 
   if (s.type === 'array' && s.items && typeof s.items === 'object') {

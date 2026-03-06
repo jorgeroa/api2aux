@@ -40,6 +40,16 @@ function ToolResultLinks({ results }: { results: ToolResultEntry[] }) {
   const handleClick = (entry: ToolResultEntry) => {
     const schema = inferSchema(entry.data, url || '')
     useAppStore.getState().fetchSuccess(entry.data, schema)
+
+    // Scroll the data into view and flash highlight after React commits
+    setTimeout(() => {
+      const el = document.getElementById('response-data')
+      if (el) {
+        el.scrollIntoView({ behavior: 'smooth', block: 'start' })
+        el.classList.add('highlight-flash')
+        setTimeout(() => el.classList.remove('highlight-flash'), 1500)
+      }
+    }, 50)
   }
 
   return (

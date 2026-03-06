@@ -379,6 +379,35 @@ export function MCPExportDialog({ open, onClose }: MCPExportDialogProps) {
                     <p className="text-sm text-muted-foreground">
                       {parsedSpec.operations.length} tools generated from {parsedSpec.title}
                     </p>
+                    {/* Semantic response fields (from live analysis, if available) */}
+                    {(() => {
+                      const responseFields = getResponseFieldDescriptions(analysisCache as Map<string, { semantics: Map<string, { detectedCategory?: string; level?: string }> }>)
+                      if (responseFields.length === 0) return null
+                      return (
+                        <Disclosure defaultOpen>
+                          <DisclosureButton className="flex items-center justify-between w-full text-sm font-semibold text-muted-foreground uppercase tracking-wide">
+                            {({ open: isOpen }) => (
+                              <>
+                                Detected Response Fields ({responseFields.length})
+                                <ChevronIcon open={isOpen} />
+                              </>
+                            )}
+                          </DisclosureButton>
+                          <DisclosurePanel className="mt-2 flex flex-wrap gap-2">
+                            {responseFields.map((field) => (
+                              <div
+                                key={field.name}
+                                className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md border border-border text-xs"
+                              >
+                                <code className="font-mono text-foreground">{field.name}</code>
+                                <span className="text-muted-foreground/70">{field.category}</span>
+                              </div>
+                            ))}
+                          </DisclosurePanel>
+                        </Disclosure>
+                      )
+                    })()}
+
                     {/* Group by tag */}
                     {(() => {
                       const grouped = new Map<string, ParsedOperation[]>()

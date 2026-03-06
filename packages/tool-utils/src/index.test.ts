@@ -27,6 +27,31 @@ describe('extractResponseFields', () => {
     })).toEqual(['foo', 'bar'])
   })
 
+  it('unwraps list wrapper objects to get entity fields', () => {
+    // Common pattern: { count: number, results: [{ index, name, url }] }
+    expect(extractResponseFields({
+      type: 'object',
+      properties: {
+        count: { type: 'integer' },
+        results: {
+          type: 'array',
+          items: {
+            type: 'object',
+            properties: { index: {}, name: {}, url: {} },
+          },
+        },
+      },
+    })).toEqual(['index', 'name', 'url'])
+  })
+
+  it('does not unwrap objects with many top-level fields', () => {
+    // 5+ fields = not a wrapper, return top-level fields as-is
+    expect(extractResponseFields({
+      type: 'object',
+      properties: { a: {}, b: {}, c: {}, d: {}, e: {} },
+    })).toEqual(['a', 'b', 'c', 'd', 'e'])
+  })
+
   it('returns null for empty/invalid schema', () => {
     expect(extractResponseFields(null)).toBeNull()
     expect(extractResponseFields({})).toBeNull()

@@ -381,7 +381,7 @@ function App() {
 
                             {/* Data Rendering (after fetching operation) */}
                             {schema && data !== null && (
-                              <div className="border-t border-border pt-6">
+                              <div id="response-data" className="border-t border-border pt-6">
                                 <h3 className="text-lg font-semibold text-foreground mb-4">Response Data</h3>
                                 <DynamicRenderer
                                   data={data}
@@ -493,7 +493,7 @@ function App() {
 
                           {/* Data Rendering (after fetching operation) */}
                           {schema && data !== null && (
-                            <div className="border-t border-border pt-6">
+                            <div id="response-data" className="border-t border-border pt-6">
                               <h3 className="text-lg font-semibold text-foreground mb-4">Response Data</h3>
                               <DynamicRenderer
                                 data={data}
@@ -517,12 +517,14 @@ function App() {
                   {loading && <ResultsToolbar />}
                   {loading && <SkeletonTable />}
                   {!loading && schema && data !== null && (
-                    <DynamicRenderer
-                      data={data}
-                      schema={schema.rootType}
-                      path="$"
-                      depth={0}
-                    />
+                    <div id="response-data">
+                      <DynamicRenderer
+                        data={data}
+                        schema={schema.rootType}
+                        path="$"
+                        depth={0}
+                      />
+                    </div>
                   )}
                 </>
               )}
@@ -568,13 +570,15 @@ function App() {
 
                         {/* Data rendering - show when data is present */}
                         {schema && data !== null && (
-                          <DynamicRenderer
-                            data={data}
-                            schema={schema.rootType}
-                            path="$"
-                            depth={0}
-                            hideViewControls
-                          />
+                          <div id="response-data">
+                            <DynamicRenderer
+                              data={data}
+                              schema={schema.rootType}
+                              path="$"
+                              depth={0}
+                              hideViewControls
+                            />
+                          </div>
                         )}
                       </>
                     }
