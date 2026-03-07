@@ -1,9 +1,13 @@
 FROM node:20-slim AS base
-RUN corepack enable && corepack prepare pnpm@latest --activate
+
+ENV PNPM_HOME="/pnpm"
+ENV PATH="$PNPM_HOME:$PATH"
+RUN corepack enable && corepack prepare pnpm@9 --activate
+
 WORKDIR /app
 
 # Install dependencies
-COPY package.json pnpm-workspace.yaml pnpm-lock.yaml ./
+COPY package.json pnpm-workspace.yaml pnpm-lock.yaml .npmrc* ./
 COPY packages/app/package.json packages/app/
 COPY packages/mcp-worker/package.json packages/mcp-worker/
 COPY packages/mcp-server/package.json packages/mcp-server/
@@ -17,7 +21,11 @@ RUN pnpm -r build
 
 # Production image
 FROM node:20-slim AS production
-RUN corepack enable && corepack prepare pnpm@latest --activate
+
+ENV PNPM_HOME="/pnpm"
+ENV PATH="$PNPM_HOME:$PATH"
+RUN corepack enable && corepack prepare pnpm@9 --activate
+
 WORKDIR /app
 
 COPY --from=base /app/package.json /app/pnpm-workspace.yaml /app/pnpm-lock.yaml ./
