@@ -5,7 +5,7 @@
 
 import type { ParsedOperation, ParsedSpec } from '@api2aux/semantic-analysis'
 
-const MCP_WORKER_URL = import.meta.env.VITE_MCP_WORKER_URL || 'https://api2aux-mcp.jgt-992.workers.dev'
+const MCP_WORKER_URL = import.meta.env.VITE_MCP_WORKER_URL || ''
 
 export interface DeployConfig {
   apiUrl: string
@@ -25,7 +25,14 @@ export interface DeployResult {
 /**
  * Deploy an API as a hosted MCP server by registering it with the Worker.
  */
+export function isMcpWorkerConfigured(): boolean {
+  return MCP_WORKER_URL !== ''
+}
+
 export async function deployAsMcpServer(config: DeployConfig): Promise<DeployResult> {
+  if (!MCP_WORKER_URL) {
+    throw new Error('MCP Worker URL not configured. Set VITE_MCP_WORKER_URL environment variable.')
+  }
   // OpenAPI specs can have circular $refs after dereferencing.
   // Use a seen-set replacer to safely serialize.
   const seen = new WeakSet()
@@ -55,6 +62,7 @@ export async function deployAsMcpServer(config: DeployConfig): Promise<DeployRes
  * Find an existing deployment for a given API URL.
  */
 export async function findExistingDeployment(apiUrl: string): Promise<DeployResult | null> {
+  if (!MCP_WORKER_URL) return null
   try {
     const response = await fetch(`${MCP_WORKER_URL}/tenants`, {
       signal: AbortSignal.timeout(5000),

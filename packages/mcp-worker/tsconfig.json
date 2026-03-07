@@ -4,7 +4,6 @@
     "outDir": "./dist",
     "rootDir": "./src",
     "lib": ["ES2022"],
-    "types": ["@cloudflare/workers-types"],
     "noUncheckedIndexedAccess": true
   },
   "include": ["src"],

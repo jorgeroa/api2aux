@@ -4,7 +4,7 @@ import type { Credential } from '../../types/auth'
 
 /**
  * Rewrite absolute URLs through the CORS proxy.
- * In dev: handled by Vite plugin. In prod: handled by Cloudflare Pages Function.
+ * In dev: handled by Vite plugin. In prod: handled by the combined Node.js server.
  */
 function proxyUrl(url: string): string {
   if (url.startsWith('http')) {

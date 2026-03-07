@@ -10,9 +10,7 @@
     "preview": "vite preview",
     "test": "vitest",
     "test:run": "vitest run",
-    "generate-embeddings": "node scripts/generate-embeddings.mjs",
-    "deploy": "pnpm build && wrangler pages deploy",
-    "deploy:preview": "pnpm build && wrangler pages deploy --branch preview"
+    "generate-embeddings": "node scripts/generate-embeddings.mjs"
   },
   "dependencies": {
     "@api2aux/semantic-analysis": "workspace:*",

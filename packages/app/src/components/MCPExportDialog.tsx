@@ -4,7 +4,7 @@ import { toast } from 'sonner'
 import { useAppStore } from '../store/appStore'
 import { useAuthStore } from '../store/authStore'
 import { parseUrlParameters } from '../services/urlParser/parser'
-import { deployAsMcpServer, findExistingDeployment } from '../services/mcp/deploy'
+import { deployAsMcpServer, findExistingDeployment, isMcpWorkerConfigured } from '../services/mcp/deploy'
 import type { Credential } from '../types/auth'
 import type { ParsedOperation } from '@api2aux/semantic-analysis'
 import { generateToolName, generateDescription } from '@api2aux/tool-utils'
@@ -662,7 +662,14 @@ export function MCPExportDialog({ open, onClose }: MCPExportDialogProps) {
                   Deploy this API as a hosted MCP server. External clients connect via Streamable HTTP — no local install needed.
                 </p>
 
-                {!parsedSpec ? (
+                {!isMcpWorkerConfigured() ? (
+                  <div className="bg-muted rounded-lg p-4 space-y-2">
+                    <p className="text-sm font-medium text-foreground">MCP Worker not configured</p>
+                    <p className="text-xs text-muted-foreground">
+                      Set the <code className="bg-background px-1 py-0.5 rounded text-xs">VITE_MCP_WORKER_URL</code> environment variable to enable hosted MCP deployment.
+                    </p>
+                  </div>
+                ) : !parsedSpec ? (
                   <p className="text-sm text-muted-foreground italic">
                     This API needs an OpenAPI spec to deploy as hosted MCP. Raw URL APIs are not yet supported.
                   </p>

@@ -1,4 +1,4 @@
 packages:
   - packages/*
 
-onlyBuiltDependencies: esbuild,workerd
+onlyBuiltDependencies: esbuild

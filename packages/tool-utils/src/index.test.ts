@@ -92,7 +92,7 @@ describe('generateDescription', () => {
     const desc = generateDescription(op)
     expect(desc).toContain('Get a class by index.')
     expect(desc).toContain('Tags: Class')
-    expect(desc).toContain('Returns: name, hit_die')
+    expect(desc).toContain('Returns: { name: any, hit_die: any }')
   })
 
   it('includes path when includePath option is set', () => {

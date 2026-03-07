@@ -14,7 +14,7 @@ export interface TenantStore {
   list(prefix: string): Promise<string[]>
 }
 
-// ── Tenant configuration (stored in KV) ──────────────────────────────
+// ── Tenant configuration ─────────────────────────────────────────────
 
 export interface TenantConfig {
   apiUrl: string

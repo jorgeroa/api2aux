@@ -4,7 +4,7 @@
  * Shared pure functions for generating tool names, descriptions, and metadata
  * from API operations. Used by the app chat, MCP server, and hosted MCP worker.
  *
- * Zero dependencies — safe for Cloudflare Workers and any JS runtime.
+ * Zero dependencies — safe for any JS runtime.
  */
 
 export type {

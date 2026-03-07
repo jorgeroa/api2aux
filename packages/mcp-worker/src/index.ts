@@ -1,6 +1,6 @@
 /**
  * Hono app factory — runtime-agnostic.
- * Entry files (entry-cloudflare.ts, etc.) create a TenantStore
+ * Entry files (adapters/node.ts, etc.) create a TenantStore
  * and call createApp() to get the Hono app.
  */
 

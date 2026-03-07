@@ -1,12 +1,10 @@
 /**
- * Seed catalog APIs into local wrangler KV for development.
+ * Seed catalog APIs into the MCP worker.
  * Run with: npx tsx scripts/seed-catalog.ts
  *
  * This script builds TenantConfig objects for each catalog API
- * and stores them in local KV via wrangler.
+ * and registers them via the worker's HTTP API.
  */
-
-import { execSync } from 'node:child_process'
 
 interface SerializableOperation {
   path: string
@@ -122,29 +120,34 @@ const CATALOG: Array<{ name: string; baseUrl: string; operations: SerializableOp
 
 // ── Seed logic ───────────────────────────────────────────────────────
 
-const now = new Date()
-const sixMonths = new Date(now.getTime() + 6 * 30 * 24 * 60 * 60 * 1000)
+const WORKER_URL = process.env.MCP_WORKER_URL || 'http://localhost:8787'
 
-for (const api of CATALOG) {
-  const config: TenantConfig = {
-    apiUrl: api.baseUrl,
-    baseUrl: api.baseUrl,
-    name: api.name,
-    authType: 'none',
-    operations: api.operations,
-    createdAt: now.toISOString(),
-    expiresAt: sixMonths.toISOString(),
+async function seed() {
+  for (const api of CATALOG) {
+    console.log(`Seeding ${api.name} (${api.operations.length} operations)...`)
+
+    const response = await fetch(`${WORKER_URL}/register`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        apiUrl: api.baseUrl,
+        baseUrl: api.baseUrl,
+        name: api.name,
+        authType: 'none',
+        operations: api.operations,
+      }),
+    })
+
+    if (!response.ok) {
+      console.error(`Failed to seed ${api.name}: ${response.status}`)
+      continue
+    }
+
+    const result = await response.json()
+    console.log(`  → Registered as ${(result as { tenantId: string }).tenantId}`)
   }
 
-  const key = `catalog:${api.name}`
-  const value = JSON.stringify(config)
-
-  console.log(`Seeding ${key} (${api.operations.length} operations)...`)
-
-  execSync(
-    `npx wrangler kv key put --binding TENANT_STORE --preview --local "${key}" '${value.replace(/'/g, "'\\''")}'`,
-    { cwd: import.meta.dirname, stdio: 'inherit' }
-  )
+  console.log(`\nSeeded ${CATALOG.length} catalog APIs.`)
 }
 
-console.log(`\nSeeded ${CATALOG.length} catalog APIs.`)
+seed().catch(console.error)

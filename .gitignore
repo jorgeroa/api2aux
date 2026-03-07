@@ -15,6 +15,9 @@ dist-ssr
 .playwright-mcp
 .mcp.json
 .vite
+wrangler.toml
+.dev.vars
+.wrangler
 
 # Editor directories and files
 .vscode/*
