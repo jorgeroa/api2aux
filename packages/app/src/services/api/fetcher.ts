@@ -1,3 +1,5 @@
+import { injectAuth, ParamLocation } from 'api-invoke'
+import type { Auth } from 'api-invoke'
 import { CORSError, NetworkError, APIError, ParseError, AuthError } from './errors'
 import { useAuthStore } from '../../store/authStore'
 import type { Credential } from '../../types/auth'
@@ -68,11 +70,38 @@ async function detectCORS(url: string): Promise<boolean> {
 }
 
 /**
- * Validates HTTP header name format.
- * Must start with a letter and contain only letters, numbers, and hyphens.
+ * Convert app Credential to api-invoke Auth.
  */
-function validateHeaderName(name: string): boolean {
-  return /^[a-zA-Z][a-zA-Z0-9-]*$/.test(name)
+function credentialToAuth(credential: Credential): Auth {
+  switch (credential.type) {
+    case 'bearer':
+      return { type: 'bearer', token: credential.token }
+    case 'basic':
+      return { type: 'basic', username: credential.username, password: credential.password }
+    case 'apiKey':
+      return { type: 'apiKey', location: ParamLocation.HEADER, name: credential.headerName, value: credential.value }
+    case 'queryParam':
+      return { type: 'apiKey', location: ParamLocation.QUERY, name: credential.paramName, value: credential.value }
+  }
+}
+
+/**
+ * Build authenticated request using api-invoke's injectAuth.
+ * Returns modified URL and RequestInit with auth headers/params.
+ */
+function buildAuthenticatedRequest(url: string, credential: Credential): { url: string; init: RequestInit } {
+  const headers: Record<string, string> = { 'Accept': 'application/json' }
+  const auth = credentialToAuth(credential)
+  const injected = injectAuth(url, headers, auth)
+
+  return {
+    url: injected.url,
+    init: {
+      mode: 'cors',
+      credentials: 'omit',
+      headers: { ...headers, ...injected.headers },
+    },
+  }
 }
 
 /**
@@ -84,72 +113,14 @@ async function safeParseResponseBody(response: Response): Promise<string> {
     const text = await response.text()
     if (!text) return ''
 
-    // Try to parse as JSON
     try {
       const json = JSON.parse(text)
       return JSON.stringify(json)
     } catch {
-      // Not JSON, return raw text
       return text
     }
   } catch {
     return ''
-  }
-}
-
-/**
- * Build authenticated request with credentials injected.
- * Returns modified URL and RequestInit with auth headers/params.
- */
-function buildAuthenticatedRequest(url: string, credential: Credential): { url: string; init: RequestInit } {
-  const init: RequestInit = {
-    mode: 'cors',
-    credentials: 'omit',
-    headers: {
-      'Accept': 'application/json',
-    },
-  }
-
-  switch (credential.type) {
-    case 'bearer': {
-      init.headers = {
-        ...init.headers,
-        'Authorization': `Bearer ${credential.token}`,
-      }
-      return { url, init }
-    }
-
-    case 'basic': {
-      const encoded = btoa(`${credential.username}:${credential.password}`)
-      init.headers = {
-        ...init.headers,
-        'Authorization': `Basic ${encoded}`,
-      }
-      return { url, init }
-    }
-
-    case 'apiKey': {
-      if (!validateHeaderName(credential.headerName)) {
-        throw new Error(`Invalid header name: ${credential.headerName}`)
-      }
-      init.headers = {
-        ...init.headers,
-        [credential.headerName]: credential.value,
-      }
-      return { url, init }
-    }
-
-    case 'queryParam': {
-      const parsedUrl = new URL(url)
-      parsedUrl.searchParams.set(credential.paramName, credential.value)
-      return { url: parsedUrl.toString(), init }
-    }
-
-    default: {
-      // TypeScript exhaustiveness check
-      const _exhaustive: never = credential
-      return _exhaustive
-    }
   }
 }
 

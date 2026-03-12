@@ -4,6 +4,7 @@ import { fetchWithAuth, type FetchOptions } from '../services/api/fetcher'
 import { inferSchema } from '../services/schema/inferrer'
 import { parseOpenAPISpec } from '@api2aux/semantic-analysis'
 import type { Operation } from '@api2aux/semantic-analysis'
+import { buildUrl } from 'api-invoke'
 
 /**
  * Hook that provides a function to fetch and infer schema from a URL.
@@ -67,31 +68,8 @@ export function useAPIFetch() {
     try {
       startFetch()
 
-      // Build full URL starting with base + path
-      let fullUrl = baseUrl + operation.path
+      const fullUrl = buildUrl(baseUrl, operation, params)
 
-      // Replace path parameters: {paramName} -> value
-      for (const param of operation.parameters) {
-        const value = params[param.name]
-        if (param.in === 'path' && value) {
-          fullUrl = fullUrl.replace(`{${param.name}}`, encodeURIComponent(value))
-        }
-      }
-
-      // Append query parameters
-      const queryParams = new URLSearchParams()
-      for (const param of operation.parameters) {
-        const value = params[param.name]
-        if (param.in === 'query' && value) {
-          queryParams.append(param.name, value)
-        }
-      }
-
-      if (queryParams.toString()) {
-        fullUrl += '?' + queryParams.toString()
-      }
-
-      // Fetch data from the built URL
       const data = await fetchWithAuth(fullUrl, {
         method: operation.method,
         body: bodyJson,

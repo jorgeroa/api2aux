@@ -123,7 +123,7 @@ describe('fetchWithAuth', () => {
       )
     })
 
-    it('rejects invalid header name', async () => {
+    it('passes through unusual header names (validation deferred to fetch runtime)', async () => {
       const credential: Credential = {
         type: 'apiKey',
         label: 'Bad Header',
@@ -135,7 +135,13 @@ describe('fetchWithAuth', () => {
         getActiveCredential: vi.fn().mockReturnValue(credential),
       } as any)
 
-      await expect(fetchWithAuth(testUrl)).rejects.toThrow('Invalid header name: 123-bad')
+      await fetchWithAuth(testUrl)
+      expect(mockFetch).toHaveBeenCalledWith(
+        expect.any(String),
+        expect.objectContaining({
+          headers: expect.objectContaining({ '123-bad': 'value' }),
+        })
+      )
     })
   })
 
