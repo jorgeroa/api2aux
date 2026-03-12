@@ -1,8 +1,8 @@
 /**
  * Executes API calls for MCP tool invocations.
- * Delegates to api-invoke with throwOnHttpError: false so error
- * responses are returned as data (needed for MCP tools to show
- * error details to the LLM).
+ * executeTool delegates to api-invoke with throwOnHttpError: false so error
+ * responses are returned as data (needed for MCP tools to show error details to the LLM).
+ * executeToolStream throws on HTTP errors.
  */
 
 import { executeOperation, executeOperationStream, withRetry, logging } from 'api-invoke'

@@ -42,7 +42,8 @@ function mapError(err: unknown, url: string, credential: Credential | null): nev
         const body = err.responseBody
           ? (typeof err.responseBody === 'string' ? err.responseBody : JSON.stringify(err.responseBody))
           : ''
-        throw new AuthError(url, err.status as 401 | 403, authContext, body)
+        const authStatus = err.status === 403 ? 403 : 401 as const
+        throw new AuthError(url, authStatus, authContext, body)
       }
       case ErrorKind.PARSE:
         throw new ParseError(url)

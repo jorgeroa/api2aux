@@ -35,6 +35,8 @@ function parseAuth(config: ServerConfig): Auth | Auth[] | undefined {
         name: config.header.slice(0, colonIdx).trim(),
         value: config.header.slice(colonIdx + 1).trim(),
       })
+    } else {
+      console.error(`[api2aux-mcp] Warning: --header value does not contain ":" separator. Expected format: "HeaderName: value"`)
     }
   }
   if (config.apiKey) {
@@ -46,6 +48,8 @@ function parseAuth(config: ServerConfig): Auth | Auth[] | undefined {
         name: config.apiKey.slice(0, eqIdx),
         value: config.apiKey.slice(eqIdx + 1),
       })
+    } else {
+      console.error(`[api2aux-mcp] Warning: --api-key value does not contain "=" separator. Expected format: "paramName=value"`)
     }
   }
   if (config.cookie) {
@@ -56,6 +60,8 @@ function parseAuth(config: ServerConfig): Auth | Auth[] | undefined {
         name: config.cookie.slice(0, eqIdx),
         value: config.cookie.slice(eqIdx + 1),
       })
+    } else {
+      console.error(`[api2aux-mcp] Warning: --cookie value does not contain "=" separator. Expected format: "name=value"`)
     }
   }
 
@@ -433,8 +439,9 @@ function createGraphQLToolHandler(
     const noTruncate = fullResponse || args.full_response === true
     try {
       const result = await executeTool(baseUrl, tool.operation, args, bridgeAuth, { debug: showDebug })
+      const fullResponseText = formatResponse(result.data, noTruncate)
       const prefix = showDebug
-        ? formatDebugInfo(result, JSON.stringify(result.data).length)
+        ? formatDebugInfo(result, fullResponseText.length)
         : ''
 
       // Check for GraphQL errors (HTTP 200 but errors in response)
@@ -465,11 +472,10 @@ function createGraphQLToolHandler(
         const label = result.errorKind === ErrorKind.RATE_LIMIT ? 'Rate limited'
           : result.errorKind === ErrorKind.AUTH ? 'Auth error'
           : `API error ${result.status}`
-        const responseText = formatResponse(result.data, noTruncate)
         return {
           content: [{
             type: 'text' as const,
-            text: `${prefix}${label}: ${responseText}`,
+            text: `${prefix}${label}: ${fullResponseText}`,
           }],
           isError: true,
         }

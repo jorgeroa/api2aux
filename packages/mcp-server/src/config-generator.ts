@@ -47,6 +47,8 @@ function buildArgs(config: ServerConfig): string[] {
 
   if (config.openapiUrl) {
     args.push('--openapi', config.openapiUrl)
+  } else if (config.graphqlUrl) {
+    args.push('--graphql', config.graphqlUrl)
   } else if (config.apiUrl) {
     args.push('--api', config.apiUrl)
   }
@@ -65,6 +67,10 @@ function buildArgs(config: ServerConfig): string[] {
 
   if (config.apiKey) {
     args.push('--api-key', config.apiKey)
+  }
+
+  if (config.cookie) {
+    args.push('--cookie', config.cookie)
   }
 
   return args

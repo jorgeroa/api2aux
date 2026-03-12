@@ -13,7 +13,7 @@ import { AuthConfigType } from '../types'
  * Supported forwarding headers:
  * - X-Forwarded-Api-Key: generic API key
  * - X-Api-Key: alternative API key header
- * - Authorization: forwarded as-is for bearer auth
+ * - Authorization: extracts token from Bearer header for token-based auth
  */
 export function mapCredentials(request: Request, config: TenantConfig): AuthConfig {
   if (config.authType === AuthConfigType.NONE) {

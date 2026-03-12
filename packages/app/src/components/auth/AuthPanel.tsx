@@ -7,6 +7,8 @@ import type { AuthType } from '../../types/auth'
 import type { AuthScheme } from '@api2aux/semantic-analysis'
 import { AlertTriangle } from 'lucide-react'
 
+const APP_AUTH_TYPES = new Set<string>(['bearer', 'basic', 'apiKey', 'queryParam'])
+
 interface AuthPanelProps {
   url: string
   isOpen: boolean
@@ -37,7 +39,6 @@ export function AuthPanel({ url, isOpen, authError, detectedAuth, onConfigureCli
   }, [storeType])
 
   // Separate supported and unsupported schemes
-  const APP_AUTH_TYPES = new Set<string>(['bearer', 'basic', 'apiKey', 'queryParam'])
   const supportedSchemes = detectedAuth?.filter(s => s.authType !== null && APP_AUTH_TYPES.has(s.authType)) ?? []
   const unsupportedSchemes = detectedAuth?.filter(s => s.authType === null) ?? []
 

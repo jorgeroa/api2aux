@@ -165,7 +165,8 @@ export function describeFieldsFromData(data: unknown, url: string): string | nul
       : ''
 
     return `Returns: ${capped.join(', ')}${suffix}`
-  } catch {
+  } catch (err) {
+    console.error('[api2aux-mcp] Semantic field analysis failed:', err instanceof Error ? err.message : err)
     return null
   }
 }
@@ -195,7 +196,8 @@ async function describeResponseFields(
 
     const data = await response.json()
     return describeFieldsFromData(data, url)
-  } catch {
+  } catch (err) {
+    console.error('[api2aux-mcp] Response enrichment skipped:', err instanceof Error ? err.message : err)
     return null
   }
 }

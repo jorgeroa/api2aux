@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest'
 
 // We test the pure helper functions exported indirectly through server behavior.
-// Since parseAuth, maskHeaders, formatDebugInfo, sanitizeParamName are not exported,
+// Since parseAuth, maskHeaders, formatDebugInfo, sanitizeName are not exported,
 // we test them through createServer's validation and re-implement the logic tests here.
 
 // For now, test createServer's input validation (which is the public API).

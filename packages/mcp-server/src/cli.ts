@@ -147,8 +147,8 @@ function handleExport(config: CliOptions): void {
 }
 
 async function handleServe(config: CliOptions): Promise<void> {
-  if (!config.openapiUrl && !config.apiUrl) {
-    console.error('Error: Either --openapi or --api must be specified\n')
+  if (!config.openapiUrl && !config.apiUrl && !config.graphqlUrl) {
+    console.error('Error: One of --openapi, --api, or --graphql must be specified\n')
     printHelp()
     process.exit(1)
   }

@@ -6,10 +6,10 @@
  * and registers them via the worker's HTTP API.
  */
 
-interface SerializableOperation {
+interface SeedOperation {
   path: string
   method: string
-  operationId?: string
+  id: string
   summary?: string
   description?: string
   parameters: Array<{
@@ -20,7 +20,7 @@ interface SerializableOperation {
     schema: { type: string; format?: string; enum?: unknown[]; default?: unknown; example?: unknown; minimum?: number; maximum?: number; maxLength?: number }
   }>
   requestBody?: unknown
-  responseSchema: unknown
+  responseSchema?: unknown
   tags: string[]
 }
 
@@ -29,48 +29,48 @@ interface TenantConfig {
   baseUrl: string
   name: string
   authType: 'none'
-  operations: SerializableOperation[]
+  operations: SeedOperation[]
   createdAt: string
   expiresAt: string
 }
 
 // ── Catalog API definitions ──────────────────────────────────────────
 
-const CATALOG: Array<{ name: string; baseUrl: string; operations: SerializableOperation[] }> = [
+const CATALOG: Array<{ name: string; baseUrl: string; operations: SeedOperation[] }> = [
   {
     name: 'jsonplaceholder',
     baseUrl: 'https://jsonplaceholder.typicode.com',
     operations: [
       {
-        path: '/users', method: 'GET', operationId: 'getUsers',
+        path: '/users', method: 'GET', id: 'getUsers',
         summary: 'Get all users', parameters: [], responseSchema: null, tags: ['users'],
       },
       {
-        path: '/users/{id}', method: 'GET', operationId: 'getUserById',
+        path: '/users/{id}', method: 'GET', id: 'getUserById',
         summary: 'Get user by ID',
         parameters: [{ name: 'id', in: 'path', required: true, description: 'User ID', schema: { type: 'integer' } }],
         responseSchema: null, tags: ['users'],
       },
       {
-        path: '/posts', method: 'GET', operationId: 'getPosts',
+        path: '/posts', method: 'GET', id: 'getPosts',
         summary: 'Get all posts',
         parameters: [{ name: 'userId', in: 'query', required: false, description: 'Filter by user ID', schema: { type: 'integer' } }],
         responseSchema: null, tags: ['posts'],
       },
       {
-        path: '/posts/{id}', method: 'GET', operationId: 'getPostById',
+        path: '/posts/{id}', method: 'GET', id: 'getPostById',
         summary: 'Get post by ID',
         parameters: [{ name: 'id', in: 'path', required: true, description: 'Post ID', schema: { type: 'integer' } }],
         responseSchema: null, tags: ['posts'],
       },
       {
-        path: '/posts/{postId}/comments', method: 'GET', operationId: 'getPostComments',
+        path: '/posts/{postId}/comments', method: 'GET', id: 'getPostComments',
         summary: 'Get comments for a post',
         parameters: [{ name: 'postId', in: 'path', required: true, description: 'Post ID', schema: { type: 'integer' } }],
         responseSchema: null, tags: ['comments'],
       },
       {
-        path: '/todos', method: 'GET', operationId: 'getTodos',
+        path: '/todos', method: 'GET', id: 'getTodos',
         summary: 'Get all todos',
         parameters: [{ name: 'userId', in: 'query', required: false, description: 'Filter by user ID', schema: { type: 'integer' } }],
         responseSchema: null, tags: ['todos'],
@@ -82,11 +82,11 @@ const CATALOG: Array<{ name: string; baseUrl: string; operations: SerializableOp
     baseUrl: 'https://catfact.ninja',
     operations: [
       {
-        path: '/fact', method: 'GET', operationId: 'getRandomFact',
+        path: '/fact', method: 'GET', id: 'getRandomFact',
         summary: 'Get a random cat fact', parameters: [], responseSchema: null, tags: ['facts'],
       },
       {
-        path: '/facts', method: 'GET', operationId: 'getFacts',
+        path: '/facts', method: 'GET', id: 'getFacts',
         summary: 'Get a list of cat facts',
         parameters: [
           { name: 'limit', in: 'query', required: false, description: 'Number of facts', schema: { type: 'integer', default: 10 } },
@@ -101,15 +101,15 @@ const CATALOG: Array<{ name: string; baseUrl: string; operations: SerializableOp
     baseUrl: 'https://dog.ceo/api',
     operations: [
       {
-        path: '/breeds/list/all', method: 'GET', operationId: 'listAllBreeds',
+        path: '/breeds/list/all', method: 'GET', id: 'listAllBreeds',
         summary: 'List all dog breeds', parameters: [], responseSchema: null, tags: ['breeds'],
       },
       {
-        path: '/breeds/image/random', method: 'GET', operationId: 'getRandomImage',
+        path: '/breeds/image/random', method: 'GET', id: 'getRandomImage',
         summary: 'Get a random dog image', parameters: [], responseSchema: null, tags: ['images'],
       },
       {
-        path: '/breed/{breed}/images/random', method: 'GET', operationId: 'getBreedImage',
+        path: '/breed/{breed}/images/random', method: 'GET', id: 'getBreedImage',
         summary: 'Get a random image of a specific breed',
         parameters: [{ name: 'breed', in: 'path', required: true, description: 'Dog breed name (e.g., "labrador")', schema: { type: 'string' } }],
         responseSchema: null, tags: ['images'],

@@ -68,7 +68,7 @@ function unifiedToZodShape(def: UnifiedToolDefinition): Record<string, z.ZodType
 }
 
 /**
- * Generate MCP tools from parsed OpenAPI operations.
+ * Generate MCP tools from parsed API operations.
  */
 export function generateTools(operations: Operation[]): GeneratedTool[] {
   const defs = generateToolDefinitions(operations)
