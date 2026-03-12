@@ -16,7 +16,7 @@ export async function executeTool(
   baseUrl: string,
   operation: Operation,
   args: Record<string, unknown>,
-  auth?: Auth,
+  auth?: Auth | Auth[],
   options?: { debug?: boolean }
 ): Promise<ExecutionResult> {
   const middleware: Middleware[] = []

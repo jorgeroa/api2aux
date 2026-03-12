@@ -59,6 +59,10 @@ function parseArgs(argv: string[]): CliOptions {
         config.apiKey = next
         i += 2
         break
+      case '--cookie':
+        config.cookie = next
+        i += 2
+        break
       case '--debug':
         config.debug = true
         i++
@@ -105,6 +109,7 @@ Options:
   --token <token>     Bearer token for API authentication
   --header <h:v>      Custom header (e.g., "X-API-Key: secret")
   --api-key <k=v>     API key as query param (e.g., "apiKey=secret")
+  --cookie <n=v>      Cookie auth (e.g., "session=abc123")
   --debug             Show request URL, headers, and timing in responses
   --full-response     Disable auto-truncation of large responses
   --format <fmt>      Export format: claude-desktop (default), claude-code

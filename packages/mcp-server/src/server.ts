@@ -13,37 +13,53 @@ import type { GeneratedTool } from './tool-generator'
 import { enrichTools } from './semantic-enrichment'
 import { executeTool } from './tool-executor'
 import { formatResponse } from './response-formatter'
-import type { ServerConfig, AuthConfig } from './types'
-import { toAuth, AuthConfigType } from './types'
+import type { ServerConfig } from './types'
 
 /**
  * Parse auth config from CLI options.
+ * Supports combining multiple auth schemes (e.g., --token + --api-key).
  */
-function parseAuth(config: ServerConfig): AuthConfig {
+function parseAuth(config: ServerConfig): Auth | Auth[] | undefined {
+  const auths: Auth[] = []
+
   if (config.token) {
-    return { type: AuthConfigType.BEARER, token: config.token }
+    auths.push({ type: 'bearer', token: config.token })
   }
   if (config.header) {
     const colonIdx = config.header.indexOf(':')
     if (colonIdx > 0) {
-      return {
-        type: AuthConfigType.HEADER,
-        headerName: config.header.slice(0, colonIdx).trim(),
-        headerValue: config.header.slice(colonIdx + 1).trim(),
-      }
+      auths.push({
+        type: 'apiKey',
+        location: 'header',
+        name: config.header.slice(0, colonIdx).trim(),
+        value: config.header.slice(colonIdx + 1).trim(),
+      })
     }
   }
   if (config.apiKey) {
     const eqIdx = config.apiKey.indexOf('=')
     if (eqIdx > 0) {
-      return {
-        type: AuthConfigType.API_KEY,
-        paramName: config.apiKey.slice(0, eqIdx),
-        paramValue: config.apiKey.slice(eqIdx + 1),
-      }
+      auths.push({
+        type: 'apiKey',
+        location: 'query',
+        name: config.apiKey.slice(0, eqIdx),
+        value: config.apiKey.slice(eqIdx + 1),
+      })
     }
   }
-  return { type: AuthConfigType.NONE }
+  if (config.cookie) {
+    const eqIdx = config.cookie.indexOf('=')
+    if (eqIdx > 0) {
+      auths.push({
+        type: 'cookie',
+        name: config.cookie.slice(0, eqIdx),
+        value: config.cookie.slice(eqIdx + 1),
+      })
+    }
+  }
+
+  if (auths.length === 0) return undefined
+  return auths.length === 1 ? auths[0] : auths
 }
 
 /**
@@ -116,7 +132,7 @@ function formatDebugInfo(result: ExecutionResult, responseSize: number): string 
 function createToolHandler(
   baseUrl: string,
   tool: GeneratedTool,
-  bridgeAuth: Auth | undefined,
+  bridgeAuth: Auth | Auth[] | undefined,
   debug: boolean,
   fullResponse: boolean
 ) {
@@ -184,7 +200,7 @@ function registerToolsOnServer(
   server: McpServer,
   tools: GeneratedTool[],
   baseUrl: string,
-  bridgeAuth: Auth | undefined,
+  bridgeAuth: Auth | Auth[] | undefined,
   debug: boolean,
   fullResponse: boolean
 ): void {
@@ -220,7 +236,7 @@ function registerToolsOnServer(
 async function registerOpenAPITools(
   server: McpServer,
   specUrl: string,
-  auth: AuthConfig,
+  auth: Auth | Auth[] | undefined,
   debug: boolean,
   fullResponse: boolean
 ): Promise<void> {
@@ -234,7 +250,7 @@ async function registerOpenAPITools(
 
   const baseUrl = spec.baseUrl
   const rawTools = generateTools(spec.operations)
-  const bridgeAuth = toAuth(auth)
+  const bridgeAuth = auth
 
   console.error(`[api2aux-mcp] Parsed "${spec.title}" v${spec.version} (${spec.specFormat})`)
   console.error(`[api2aux-mcp] Base URL: ${baseUrl}`)
@@ -267,7 +283,7 @@ function sanitizeName(name: string): string {
 async function registerRawAPITool(
   server: McpServer,
   apiUrl: string,
-  auth: AuthConfig,
+  auth: Auth | Auth[] | undefined,
   serverName: string | undefined,
   debug: boolean,
   fullResponse: boolean
@@ -276,7 +292,7 @@ async function registerRawAPITool(
 
   const spec = parseRawUrl(apiUrl)
   const baseUrl = spec.baseUrl
-  const bridgeAuth = toAuth(auth)
+  const bridgeAuth = auth
   const rawTools = generateTools(spec.operations)
 
   // Override tool name from server name or hostname
