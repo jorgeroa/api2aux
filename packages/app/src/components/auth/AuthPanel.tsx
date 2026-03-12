@@ -7,7 +7,7 @@ import type { AuthType } from '../../types/auth'
 import type { AuthScheme } from '@api2aux/semantic-analysis'
 import { AlertTriangle } from 'lucide-react'
 
-const APP_AUTH_TYPES = new Set<string>(['bearer', 'basic', 'apiKey', 'queryParam'])
+const APP_AUTH_TYPES = new Set<string>(['bearer', 'basic', 'apiKey', 'queryParam', 'cookie'])
 
 interface AuthPanelProps {
   url: string

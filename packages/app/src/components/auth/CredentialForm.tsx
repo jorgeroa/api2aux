@@ -33,12 +33,15 @@ export function CredentialForm({ type, url, detectedMetadata }: CredentialFormPr
   const [headerValue, setHeaderValue] = useState('')
   const [paramName, setParamName] = useState('api_key')
   const [paramValue, setParamValue] = useState('')
+  const [cookieName, setCookieName] = useState('')
+  const [cookieValue, setCookieValue] = useState('')
 
   // Visibility toggles for password fields
   const [showToken, setShowToken] = useState(false)
   const [showPassword, setShowPassword] = useState(false)
   const [showHeaderValue, setShowHeaderValue] = useState(false)
   const [showParamValue, setShowParamValue] = useState(false)
+  const [showCookieValue, setShowCookieValue] = useState(false)
 
   // Load existing credentials into local state on mount or type change
   useEffect(() => {
@@ -62,6 +65,10 @@ export function CredentialForm({ type, url, detectedMetadata }: CredentialFormPr
           setParamName(cred.paramName)
           setParamValue(cred.value)
           break
+        case 'cookie':
+          setCookieName(cred.cookieName)
+          setCookieValue(cred.value)
+          break
       }
     } else {
       // Reset to defaults if no existing credential
@@ -73,6 +80,8 @@ export function CredentialForm({ type, url, detectedMetadata }: CredentialFormPr
       setHeaderValue('')
       setParamName(detectedMetadata?.paramName ?? 'api_key')
       setParamValue('')
+      setCookieName('')
+      setCookieValue('')
     }
   }, [type, url, detectedMetadata]) // Re-run when type, url, or detectedMetadata changes
 
@@ -255,6 +264,70 @@ export function CredentialForm({ type, url, detectedMetadata }: CredentialFormPr
               className="absolute right-1 top-1/2 -translate-y-1/2"
             >
               {showHeaderValue ? (
+                <EyeOff className="h-4 w-4 text-gray-400" />
+              ) : (
+                <Eye className="h-4 w-4 text-gray-400" />
+              )}
+            </Button>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  // Cookie
+  if (type === 'cookie') {
+    return (
+      <div className="space-y-3">
+        <div className="space-y-1.5">
+          <label htmlFor="cookie-name" className="block text-sm font-medium text-gray-700">
+            Cookie Name
+          </label>
+          <Input
+            id="cookie-name"
+            type="text"
+            value={cookieName}
+            onChange={(e) => {
+              setCookieName(e.target.value)
+              saveCredential({
+                type: 'cookie',
+                label: '',
+                cookieName: e.target.value,
+                value: cookieValue,
+              })
+            }}
+            placeholder="session_id"
+          />
+        </div>
+        <div className="space-y-1.5">
+          <label htmlFor="cookie-value" className="block text-sm font-medium text-gray-700">
+            Value
+          </label>
+          <div className="relative">
+            <Input
+              id="cookie-value"
+              type={showCookieValue ? 'text' : 'password'}
+              value={cookieValue}
+              onChange={(e) => {
+                setCookieValue(e.target.value)
+                saveCredential({
+                  type: 'cookie',
+                  label: '',
+                  cookieName,
+                  value: e.target.value,
+                })
+              }}
+              placeholder="Enter cookie value"
+              className="pr-10"
+            />
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon-sm"
+              onClick={() => setShowCookieValue(!showCookieValue)}
+              className="absolute right-1 top-1/2 -translate-y-1/2"
+            >
+              {showCookieValue ? (
                 <EyeOff className="h-4 w-4 text-gray-400" />
               ) : (
                 <Eye className="h-4 w-4 text-gray-400" />

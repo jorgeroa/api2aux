@@ -31,6 +31,7 @@ export function AuthTypeSelector({ value, onChange, detectedType }: AuthTypeSele
           <option value="basic">Basic Auth</option>
           <option value="apiKey">API Key</option>
           <option value="queryParam">Query Parameter</option>
+          <option value="cookie">Cookie</option>
         </select>
         {detectedType && value === detectedType && (
           <span className="text-xs text-primary font-medium whitespace-nowrap">

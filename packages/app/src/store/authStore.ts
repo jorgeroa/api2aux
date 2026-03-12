@@ -57,6 +57,7 @@ export const useAuthStore = create<AuthStore>()(
               basic: null,
               apiKey: null,
               queryParam: null,
+              cookie: null,
             },
             activeType: null,
           }

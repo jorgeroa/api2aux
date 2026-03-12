@@ -70,5 +70,7 @@ function formatAuthType(type: AuthType): string {
       return 'API Key'
     case 'queryParam':
       return 'Query Parameter'
+    case 'cookie':
+      return 'Cookie'
   }
 }

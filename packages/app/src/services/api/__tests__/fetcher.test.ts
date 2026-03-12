@@ -158,6 +158,34 @@ describe('fetchWithAuth', () => {
     })
   })
 
+  describe('Cookie Authentication', () => {
+    it('injects Cookie header', async () => {
+      const credential: Credential = {
+        type: 'cookie',
+        label: 'Test Cookie',
+        cookieName: 'session_id',
+        value: 'abc123',
+      }
+
+      vi.mocked(useAuthStore.getState).mockReturnValue({
+        getActiveCredential: vi.fn().mockReturnValue(credential),
+      } as any)
+
+      mockFetch.mockResolvedValue(mockResponse({ success: true }))
+
+      await fetchWithAuth(testUrl)
+
+      expect(mockFetch).toHaveBeenCalledWith(
+        expectedProxyUrl(testUrl),
+        expect.objectContaining({
+          headers: expect.objectContaining({
+            'Cookie': 'session_id=abc123',
+          }),
+        })
+      )
+    })
+  })
+
   describe('Query Parameter Authentication', () => {
     it('appends query param to URL', async () => {
       const credential: Credential = {

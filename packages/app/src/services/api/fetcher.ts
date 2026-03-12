@@ -23,6 +23,8 @@ function credentialToAuth(credential: Credential): Auth {
       return { type: 'apiKey', location: ParamLocation.HEADER, name: credential.headerName, value: credential.value }
     case 'queryParam':
       return { type: 'apiKey', location: ParamLocation.QUERY, name: credential.paramName, value: credential.value }
+    case 'cookie':
+      return { type: 'cookie', name: credential.cookieName, value: credential.value }
     default: {
       const _exhaustive: never = credential
       return _exhaustive
@@ -132,6 +134,10 @@ export function maskCredential(credential: Credential): string {
 
     case 'queryParam': {
       return `?${credential.paramName}=***`
+    }
+
+    case 'cookie': {
+      return `Cookie ${credential.cookieName}=***`
     }
 
     default: {

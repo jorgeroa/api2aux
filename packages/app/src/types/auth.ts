@@ -4,6 +4,7 @@ export const AuthType = {
   Basic: 'basic',
   ApiKey: 'apiKey',
   QueryParam: 'queryParam',
+  Cookie: 'cookie',
 } as const
 export type AuthType = typeof AuthType[keyof typeof AuthType]
 
@@ -42,12 +43,20 @@ export interface QueryParamCredential extends BaseCredential {
   value: string
 }
 
+/** Cookie authentication (Cookie: {name}={value}) */
+export interface CookieCredential extends BaseCredential {
+  type: 'cookie'
+  cookieName: string
+  value: string
+}
+
 /** Discriminated union of all credential types */
 export type Credential =
   | BearerCredential
   | BasicCredential
   | ApiKeyCredential
   | QueryParamCredential
+  | CookieCredential
 
 /** Authentication status for tracking per-API auth state */
 export const AuthStatus = {
