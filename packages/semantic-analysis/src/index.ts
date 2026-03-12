@@ -81,9 +81,25 @@ export type {
   Auth,
   AuthConfig,
   ExecutionResult,
+  BuiltRequest,
+  SSEEvent,
+  StreamingExecutionResult,
+  ResultErrorKind,
+  Middleware,
+  Enricher,
+  ClientOptions,
 } from 'api-invoke'
 
-export { AuthConfigType, ParamLocation } from 'api-invoke'
+export {
+  AuthConfigType,
+  ParamLocation,
+  HttpMethod,
+  AuthType as ApiInvokeAuthType,
+  ContentType,
+  HeaderName,
+  SpecFormat,
+  ErrorKind,
+} from 'api-invoke'
 
 // === Shared Types ===
 export { FieldType, Confidence } from './types/schema'
