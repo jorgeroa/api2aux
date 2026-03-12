@@ -7,7 +7,7 @@ import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { z } from 'zod'
 import { parseOpenAPISpec } from '@api2aux/semantic-analysis'
 import type { ParsedAPI, ExecutionResult, Auth } from 'api-invoke'
-import { parseRawUrl } from 'api-invoke'
+import { parseRawUrl, ApiInvokeError, ErrorKind } from 'api-invoke'
 import { generateTools } from './tool-generator'
 import type { GeneratedTool } from './tool-generator'
 import { enrichTools } from './semantic-enrichment'
@@ -131,10 +131,13 @@ function createToolHandler(
         : ''
 
       if (result.status >= 400) {
+        const label = result.errorKind === ErrorKind.RATE_LIMIT ? 'Rate limited'
+          : result.errorKind === ErrorKind.AUTH ? 'Auth error'
+          : `API error ${result.status}`
         return {
           content: [{
             type: 'text' as const,
-            text: `${prefix}API error ${result.status}: ${responseText}`,
+            text: `${prefix}${label}: ${responseText}`,
           }],
           isError: true,
         }
@@ -147,6 +150,22 @@ function createToolHandler(
         }],
       }
     } catch (err) {
+      if (err instanceof ApiInvokeError) {
+        const prefix = err.kind === ErrorKind.RATE_LIMIT ? 'Rate limited'
+          : err.kind === ErrorKind.AUTH ? 'Authentication failed'
+          : err.kind === ErrorKind.TIMEOUT ? 'Request timed out'
+          : err.kind === ErrorKind.NETWORK ? 'Network error'
+          : err.kind === ErrorKind.CORS ? 'CORS error'
+          : 'Request failed'
+        const suggestion = err.suggestion ? ` Suggestion: ${err.suggestion}` : ''
+        return {
+          content: [{
+            type: 'text' as const,
+            text: `${prefix}: ${err.message}${suggestion}`,
+          }],
+          isError: true,
+        }
+      }
       return {
         content: [{
           type: 'text' as const,
