@@ -28,7 +28,9 @@ import { DrilldownModeToggle } from './components/navigation/DrilldownModeToggle
 import { Toaster } from '@/components/ui/sonner'
 import { toast } from 'sonner'
 import { ExamplesPage } from './pages/ExamplesPage'
+import { RequestPreview } from './components/forms/RequestPreview'
 import { AuthError } from './services/api/errors'
+import type { BuiltRequest } from 'api-invoke'
 import 'react-loading-skeleton/dist/skeleton.css'
 
 /** Toolbar row shown during loading so the UI doesn't shift when data arrives */
@@ -64,7 +66,7 @@ function App() {
   const chatOpen = useChatStore((s) => s.open)
   const { clearFieldConfigs } = useConfigStore()
   const { getValues, clearValue, clearEndpoint } = useParameterStore()
-  const { fetchAndInfer, fetchOperation } = useAPIFetch()
+  const { fetchAndInfer, fetchOperation, previewRequest } = useAPIFetch()
 
   // Hash-based routing for /examples page
   const [page, setPage] = useState<'main' | 'examples'>(
@@ -93,6 +95,10 @@ function App() {
       })
     }
   }, [])
+
+  // Request preview state
+  const [previewData, setPreviewData] = useState<BuiltRequest | null>(null)
+  const [previewOpen, setPreviewOpen] = useState(false)
 
   // Derive auth error from error state
   const authError = error && error instanceof AuthError
@@ -161,6 +167,15 @@ function App() {
   const handleParameterSubmit = (values: Record<string, string>, bodyJson?: string) => {
     if (parsedSpec && selectedOperation) {
       fetchOperation(parsedSpec.baseUrl, selectedOperation, values, bodyJson)
+    }
+  }
+
+  // Handle request preview
+  const handlePreview = (values: Record<string, string>, bodyJson?: string) => {
+    if (parsedSpec && selectedOperation) {
+      const built = previewRequest(parsedSpec.baseUrl, selectedOperation, values, bodyJson)
+      setPreviewData(built)
+      setPreviewOpen(true)
     }
   }
 
@@ -330,6 +345,7 @@ function App() {
                             parameters={selectedOperation.parameters}
                             requestBody={selectedOperation.requestBody}
                             onSubmit={handleParameterSubmit}
+                            onPreview={handlePreview}
                             loading={loading}
                             endpoint={`${parsedSpec.baseUrl}${selectedOperation.path}`}
                             baseUrl={`${parsedSpec.baseUrl}${selectedOperation.path}`}
@@ -415,7 +431,7 @@ function App() {
                         v{parsedSpec.version}
                       </span>
                       <span className="px-2 py-1 text-xs font-medium text-muted-foreground bg-muted rounded">
-                        OpenAPI {parsedSpec.rawSpecVersion}
+                        {parsedSpec.specFormat === 'graphql' ? 'GraphQL' : `OpenAPI ${parsedSpec.rawSpecVersion}`}
                       </span>
                     </div>
                     <p className="text-sm text-muted-foreground mt-1">{parsedSpec.baseUrl}</p>
@@ -445,6 +461,7 @@ function App() {
                         <ParameterForm
                           parameters={selectedOperation.parameters}
                           onSubmit={handleParameterSubmit}
+                          onPreview={handlePreview}
                           loading={loading}
                           endpoint={`${parsedSpec.baseUrl}${selectedOperation.path}`}
                           baseUrl={`${parsedSpec.baseUrl}${selectedOperation.path}`}
@@ -599,6 +616,13 @@ function App() {
         </div>
       )}
       </AppShell>
+
+      {/* Request Preview Modal */}
+      <RequestPreview
+        request={previewData}
+        open={previewOpen}
+        onClose={() => setPreviewOpen(false)}
+      />
 
       {/* Toast notifications */}
       <Toaster position="bottom-right" />

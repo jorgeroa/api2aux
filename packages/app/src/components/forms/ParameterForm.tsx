@@ -18,6 +18,7 @@ interface ParameterFormProps {
   parameters: FormParameter[]
   requestBody?: RequestBody
   onSubmit: (values: Record<string, string>, bodyJson?: string) => void
+  onPreview?: (values: Record<string, string>, bodyJson?: string) => void
   loading?: boolean
   endpoint?: string           // For persistence key
   rawUrl?: string             // Raw URL to parse (alternative to parameters)
@@ -45,6 +46,7 @@ export function ParameterForm({
   parameters,
   requestBody,
   onSubmit,
+  onPreview,
   loading = false,
   endpoint,
   rawUrl,
@@ -314,19 +316,30 @@ export function ParameterForm({
   if (visibleUngrouped.length === 0 && grouped.size === 0 && !requestBody) {
     return (
       <form onSubmit={handleSubmit} className="space-y-4">
-        <button
-          type="submit"
-          disabled={loading}
-          className="w-full px-4 py-2 bg-primary text-primary-foreground rounded-md hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center"
-        >
-          {loading && (
-            <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-            </svg>
+        <div className="flex gap-2">
+          {onPreview && (
+            <button
+              type="button"
+              onClick={() => onPreview(values, getBodyJson())}
+              className="px-4 py-2 border border-border text-muted-foreground rounded-md hover:bg-muted focus:outline-none focus:ring-2 focus-visible:ring-ring/50"
+            >
+              Preview
+            </button>
           )}
-          {loading ? 'Fetching...' : 'Fetch Data'}
-        </button>
+          <button
+            type="submit"
+            disabled={loading}
+            className="flex-1 px-4 py-2 bg-primary text-primary-foreground rounded-md hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center"
+          >
+            {loading && (
+              <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+              </svg>
+            )}
+            {loading ? 'Fetching...' : 'Fetch Data'}
+          </button>
+        </div>
 
         {/* URL Preview */}
         {previewUrl && (
@@ -511,6 +524,17 @@ export function ParameterForm({
             className="px-4 py-2 border border-border text-muted-foreground rounded-md hover:bg-muted focus:outline-none focus:ring-2 focus-visible:ring-ring/50"
           >
             Reset All
+          </button>
+        )}
+
+        {/* Preview Button */}
+        {onPreview && (
+          <button
+            type="button"
+            onClick={() => onPreview(values, getBodyJson())}
+            className="px-4 py-2 border border-border text-muted-foreground rounded-md hover:bg-muted focus:outline-none focus:ring-2 focus-visible:ring-ring/50"
+          >
+            Preview
           </button>
         )}
 

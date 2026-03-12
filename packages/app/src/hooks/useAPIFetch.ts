@@ -6,11 +6,13 @@ import { parseOpenAPISpec } from '@api2aux/semantic-analysis'
 import type { Operation } from '@api2aux/semantic-analysis'
 import {
   executeOperation,
+  buildRequest,
   corsProxy,
   parseGraphQLSchema,
   hasGraphQLErrors,
   getGraphQLErrors,
 } from 'api-invoke'
+import type { BuiltRequest } from 'api-invoke'
 import { useAuthStore } from '../store/authStore'
 import { GraphQLError } from '../services/api/errors'
 
@@ -197,5 +199,21 @@ export function useAPIFetch() {
     }
   }
 
-  return { fetchAndInfer, fetchSpec, fetchGraphQL, fetchOperation }
+  const previewRequest = (
+    baseUrl: string,
+    operation: Operation,
+    params: Record<string, string>,
+    bodyJson?: string
+  ): BuiltRequest => {
+    const credential = useAuthStore.getState().getActiveCredential(baseUrl)
+    const args: Record<string, unknown> = { ...params }
+    if (bodyJson) {
+      args.body = JSON.parse(bodyJson)
+    }
+    return buildRequest(baseUrl, operation, args, {
+      auth: credential ? credentialToAuth(credential) : undefined,
+    })
+  }
+
+  return { fetchAndInfer, fetchSpec, fetchGraphQL, fetchOperation, previewRequest }
 }
