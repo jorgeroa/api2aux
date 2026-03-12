@@ -16,5 +16,5 @@ export async function executeTool(
   args: Record<string, unknown>,
   auth?: Auth
 ): Promise<ExecutionResult> {
-  return executeOperation(baseUrl, operation, args, { auth, throwOnHttpError: false })
+  return executeOperation(baseUrl, operation, args, { auth, throwOnHttpError: false, timeoutMs: 30000 })
 }

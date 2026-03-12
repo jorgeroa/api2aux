@@ -6,8 +6,8 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { z } from 'zod'
 import { parseOpenAPISpec } from '@api2aux/semantic-analysis'
-import type { ParsedAPI } from 'api-invoke'
-import { injectAuth } from 'api-invoke'
+import type { ParsedAPI, ExecutionResult } from 'api-invoke'
+import { injectAuth, ContentType, HeaderName } from 'api-invoke'
 import { generateTools } from './tool-generator'
 import { enrichTools, describeFieldsFromData } from './semantic-enrichment'
 import { executeTool } from './tool-executor'
@@ -95,21 +95,15 @@ function maskHeaders(headers: Record<string, string>): Record<string, string> {
 /**
  * Format debug info as a prefix string for tool responses.
  */
-function formatDebugInfo(
-  method: string,
-  url: string,
-  headers: Record<string, string>,
-  status: number,
-  responseSize: number,
-  elapsedMs: number
-): string {
+function formatDebugInfo(result: ExecutionResult, responseSize: number): string {
+  const { method, url, headers } = result.request
   const maskedHeaders = maskHeaders(headers)
   const headerStr = Object.entries(maskedHeaders).map(([k, v]) => `${k}: ${v}`).join(', ')
   const sizeStr = responseSize > 1024 ? `${(responseSize / 1024).toFixed(1)}KB` : `${responseSize}B`
   return [
     `[DEBUG] ${method} ${url}`,
     `[DEBUG] Headers: ${headerStr}`,
-    `[DEBUG] Status: ${status} | Response: ${sizeStr} | Time: ${elapsedMs}ms`,
+    `[DEBUG] Status: ${result.status} | Response: ${sizeStr} | Time: ${result.elapsedMs}ms`,
     '',
   ].join('\n')
 }
@@ -161,7 +155,7 @@ async function registerOpenAPITools(
         const result = await executeTool(baseUrl, tool.operation, args, bridgeAuth)
         const responseText = formatResponse(result.data, noTruncate)
         const prefix = showDebug
-          ? formatDebugInfo(result.request.method, result.request.url, result.request.headers, result.status, responseText.length, result.elapsedMs)
+          ? formatDebugInfo(result, responseText.length)
           : ''
 
         if (result.status >= 400) {
@@ -284,7 +278,7 @@ async function registerRawAPITool(
       ? `${baseUrl}?${defaultParams.map(p => `${encodeURIComponent(p.original)}=${encodeURIComponent(p.defaultValue)}`).join('&')}`
       : apiUrl
     const sampleResponse = await fetch(sampleUrl, {
-      headers: { 'Accept': 'application/json' },
+      headers: { [HeaderName.ACCEPT]: ContentType.JSON },
       signal: AbortSignal.timeout(5000),
     })
     if (sampleResponse.ok) {
@@ -333,7 +327,7 @@ async function registerRawAPITool(
           url += '?' + params.toString()
         }
 
-        const headers: Record<string, string> = { 'Accept': 'application/json' }
+        const headers: Record<string, string> = { [HeaderName.ACCEPT]: ContentType.JSON }
         if (bridgeAuth) {
           const authed = injectAuth(url, headers, bridgeAuth)
           url = authed.url
@@ -347,7 +341,10 @@ async function registerRawAPITool(
         const responseText = formatResponse(data, noTruncate)
 
         const prefix = showDebug
-          ? formatDebugInfo('GET', url, headers, response.status, responseText.length, elapsedMs)
+          ? formatDebugInfo(
+              { request: { method: 'GET', url, headers }, status: response.status, elapsedMs } as ExecutionResult,
+              responseText.length
+            )
           : ''
 
         return {

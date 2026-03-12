@@ -19,7 +19,7 @@
     "test:run": "vitest run"
   },
   "dependencies": {
-    "api-invoke": "file:../../../api-invoke"
+    "api-invoke": "link:../../../api-invoke"
   },
   "devDependencies": {
     "tsup": "^8.5.1",

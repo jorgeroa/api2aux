@@ -11,7 +11,7 @@ import {
   getBestMatch,
 } from '@api2aux/semantic-analysis'
 import type { Operation, Parameter } from 'api-invoke'
-import { HttpMethod, ParamLocation } from 'api-invoke'
+import { HttpMethod, ParamLocation, ContentType, HeaderName } from 'api-invoke'
 import type { GeneratedTool } from './tool-generator'
 
 // ---------------------------------------------------------------------------
@@ -187,7 +187,7 @@ async function describeResponseFields(
   try {
     const url = new URL(operation.path, baseUrl).toString()
     const response = await fetch(url, {
-      headers: { 'Accept': 'application/json' },
+      headers: { [HeaderName.ACCEPT]: ContentType.JSON },
       signal: AbortSignal.timeout(5000),
     })
 
