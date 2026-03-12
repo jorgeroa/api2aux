@@ -3,6 +3,7 @@
  * OpenRouter supports CORS, so no backend proxy needed for the initial version.
  */
 
+import { executeRaw, ApiInvokeError } from 'api-invoke'
 import type { ChatMessage, Tool, LLMResponse, ChatConfig } from './types'
 
 const OPENROUTER_BASE = 'https://openrouter.ai/api/v1'
@@ -37,32 +38,28 @@ export async function chatCompletion(
     body.tool_choice = 'auto'
   }
 
-  const response = await fetch(`${baseUrl}/chat/completions`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'Authorization': `Bearer ${config.apiKey}`,
-      ...(config.provider === 'openrouter' ? {
-        'HTTP-Referer': window.location.origin,
-        'X-Title': 'api2aux',
-      } : {}),
-    },
-    body: JSON.stringify(body),
-  })
+  try {
+    const result = await executeRaw(`${baseUrl}/chat/completions`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${config.apiKey}`,
+        ...(config.provider === 'openrouter' ? {
+          'HTTP-Referer': window.location.origin,
+          'X-Title': 'api2aux',
+        } : {}),
+      },
+      body: JSON.stringify(body),
+      timeoutMs: 30000,
+    })
 
-  if (!response.ok) {
-    const errorText = await response.text()
-    let errorMessage: string
-    try {
-      const errorJson = JSON.parse(errorText)
-      errorMessage = errorJson.error?.message || errorJson.message || errorText
-    } catch {
-      errorMessage = errorText
+    return result.data as LLMResponse
+  } catch (error) {
+    if (error instanceof ApiInvokeError) {
+      throw new Error(`LLM API error (${error.status ?? 'unknown'}): ${error.message}`)
     }
-    throw new Error(`LLM API error (${response.status}): ${errorMessage}`)
+    throw error
   }
-
-  return response.json()
 }
 
 /** Default models for each provider */
