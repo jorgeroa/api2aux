@@ -9,6 +9,7 @@ import { drizzle } from 'drizzle-orm/better-sqlite3'
 import { migrate } from 'drizzle-orm/better-sqlite3/migrator'
 import * as schema from './db/schema'
 import { createApp } from './index'
+import { createAuth } from './auth'
 import { LocalSpecStore } from './stores/local-spec-store'
 import { MemorySyncTarget } from './stores/memory-sync-target'
 import path from 'path'
@@ -28,7 +29,14 @@ migrate(db, { migrationsFolder: path.resolve(__dirname, './db/migrations') })
 const specStore = new LocalSpecStore(path.resolve(__dirname, '../../../data/specs'))
 const syncTarget = new MemorySyncTarget()
 
-const app = createApp({ db, specStore, syncTarget })
+// Auth — only enabled when OAuth credentials are configured
+const hasAuthCreds = !!(process.env.GITHUB_CLIENT_ID && process.env.GITHUB_CLIENT_SECRET)
+const auth = hasAuthCreds ? createAuth(db) : null
+if (!auth) {
+  console.log('Auth disabled (no OAuth credentials). Write endpoints are unprotected.')
+}
+
+const app = createApp({ db, specStore, syncTarget, auth })
 
 const port = parseInt(process.env.PORT || '8788', 10)
 

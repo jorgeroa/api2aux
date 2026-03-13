@@ -1,11 +1,15 @@
 /**
  * HTTP routes for the API catalog.
  * Thin layer: parse request → call service → return response.
+ *
+ * Read operations (GET) are public.
+ * Write operations (POST, PUT, DELETE) require authentication.
  */
 
 import { Hono } from 'hono'
 import { ApiRepository } from '../repositories/api-repository'
 import { ApiService } from '../services/api-service'
+import { requireAuth } from '../middleware/auth'
 import type { AppEnv } from '../types'
 
 const apisRouter = new Hono<AppEnv>()
@@ -15,7 +19,7 @@ function getService(c: { get(key: 'deps'): { db: import('../types').Database } }
   return new ApiService(new ApiRepository(db))
 }
 
-// ── List / search APIs ────────────────────────────────────────────────
+// ── Public read routes ────────────────────────────────────────────────
 
 apisRouter.get('/api/apis', (c) => {
   const service = getService(c)
@@ -34,13 +38,9 @@ apisRouter.get('/api/apis', (c) => {
   return c.json(result)
 })
 
-// ── Get facet counts ──────────────────────────────────────────────────
-
 apisRouter.get('/api/apis/facets', (c) => {
   return c.json(getService(c).facets())
 })
-
-// ── Get single API with operations ────────────────────────────────────
 
 apisRouter.get('/api/apis/:id', (c) => {
   const result = getService(c).getById(c.req.param('id'))
@@ -48,9 +48,9 @@ apisRouter.get('/api/apis/:id', (c) => {
   return c.json(result)
 })
 
-// ── Create API ────────────────────────────────────────────────────────
+// ── Protected write routes ────────────────────────────────────────────
 
-apisRouter.post('/api/apis', async (c) => {
+apisRouter.post('/api/apis', requireAuth, async (c) => {
   const body = await c.req.json()
 
   if (!body.id || !body.name || !body.category || !body.baseUrl) {
@@ -62,19 +62,16 @@ apisRouter.post('/api/apis', async (c) => {
   return c.json(result.data, result.status)
 })
 
-// ── Update API ────────────────────────────────────────────────────────
-
-apisRouter.put('/api/apis/:id', async (c) => {
+apisRouter.put('/api/apis/:id', requireAuth, async (c) => {
+  const id = c.req.param('id') as string
   const body = await c.req.json()
-  const updated = getService(c).update(c.req.param('id'), body)
+  const updated = getService(c).update(id, body)
   if (!updated) return c.json({ error: 'API not found' }, 404)
   return c.json(updated)
 })
 
-// ── Soft delete API ───────────────────────────────────────────────────
-
-apisRouter.delete('/api/apis/:id', (c) => {
-  const id = c.req.param('id')
+apisRouter.delete('/api/apis/:id', requireAuth, (c) => {
+  const id = c.req.param('id') as string
   const deleted = getService(c).delete(id)
   if (!deleted) return c.json({ error: 'API not found' }, 404)
   return c.json({ deleted: id })

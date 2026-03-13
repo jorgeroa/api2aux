@@ -6,6 +6,7 @@
 
 import type { BetterSQLite3Database } from 'drizzle-orm/better-sqlite3'
 import type * as schema from './db/schema'
+import type { Auth } from './auth'
 
 // ── Database ──────────────────────────────────────────────────────────
 
@@ -47,11 +48,14 @@ export interface AppDeps {
   db: Database
   specStore: SpecStore
   syncTarget: SyncTarget
+  auth: Auth | null  // null when OAuth not configured (local dev without creds)
 }
 
 /** Hono env with injected dependencies */
 export type AppEnv = {
   Variables: {
     deps: AppDeps
+    user: { id: string; name: string; email: string; image?: string | null } | null
+    session: { id: string; userId: string; token: string; expiresAt: string } | null
   }
 }
