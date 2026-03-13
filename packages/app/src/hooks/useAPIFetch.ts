@@ -91,7 +91,7 @@ export function useAPIFetch() {
         throw new Error(`Failed to fetch spec: ${response.status} ${response.statusText}`)
       }
       const specObject = await response.json()
-      const spec = await parseOpenAPISpec(specObject)
+      const spec = await parseOpenAPISpec(specObject, { specUrl: url })
       specSuccess(spec)
     } catch (error) {
       if (error instanceof Error) {
