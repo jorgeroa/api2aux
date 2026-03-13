@@ -1,4 +1,7 @@
 packages:
   - packages/*
+  - packages/api-catalog/src/admin
 
-onlyBuiltDependencies: esbuild
+onlyBuiltDependencies:
+  - esbuild
+  - better-sqlite3
