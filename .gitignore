@@ -32,3 +32,5 @@ wrangler.toml
 
 .env*
 !.env.example
+
+data/

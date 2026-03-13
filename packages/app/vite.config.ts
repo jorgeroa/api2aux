@@ -21,7 +21,7 @@ function corsProxyPlugin(): Plugin {
           return
         }
 
-        const targetUrl = decodeURIComponent((req.url || '').replace(/^\//, ''))
+        const targetUrl = decodeURIComponent((req.url || '').replace(/^\//, '')).replace(/\/$/, '')
         if (!targetUrl.startsWith('http')) {
           res.writeHead(400, { 'Content-Type': 'text/plain' })
           res.end('Missing target URL')
