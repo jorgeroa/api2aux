@@ -47,8 +47,8 @@ function summarizeToolResult(
 
 /**
  * Execute a tool call by making the actual API request.
- * For raw URLs: builds URL from base + path + query params.
- * For OpenAPI: delegates to fetchWithAuth with constructed URL.
+ * For raw URLs: calls the exact endpoint with adjusted query params only.
+ * For OpenAPI: delegates to executeOperation with the matched operation.
  */
 async function executeToolCall(
   toolName: string,
@@ -59,28 +59,17 @@ async function executeToolCall(
   const baseUrl = `${parsedUrl.protocol}//${parsedUrl.host}${parsedUrl.pathname.replace(/\/$/, '')}`
 
   if (toolName === 'query_api') {
-    // Raw URL mode: build URL from base + path + query params
-    let targetUrl = baseUrl
-    if (args.path && typeof args.path === 'string') {
-      let pathSegment = args.path.startsWith('/') ? args.path : `/${args.path}`
-      // Guard against LLM repeating the base pathname (e.g. /products/products)
-      const basePath = parsedUrl.pathname.replace(/\/$/, '')
-      if (basePath !== '/' && pathSegment.startsWith(basePath)) {
-        pathSegment = pathSegment.slice(basePath.length) || ''
-      }
-      if (pathSegment) targetUrl += pathSegment
-    }
-
+    // Raw URL mode: call the exact endpoint, only adjusting query params.
     // Start with the original URL's query params (e.g. api_key, auth tokens)
-    // then let the LLM's args override/add to them
+    // then let the LLM's args override/add to them.
     const queryParams = new URLSearchParams(parsedUrl.search)
     for (const [key, value] of Object.entries(args)) {
-      if (key !== 'path' && value !== undefined && value !== '') {
+      if (value !== undefined && value !== '') {
         queryParams.set(key, String(value))
       }
     }
     const qs = queryParams.toString()
-    if (qs) targetUrl += `?${qs}`
+    const targetUrl = qs ? `${baseUrl}?${qs}` : baseUrl
 
     return fetchWithAuth(targetUrl)
   }

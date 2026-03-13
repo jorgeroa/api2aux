@@ -354,16 +354,10 @@ export function generateRawUrlToolDefinition(
   queryParams: Array<{ name: string; values?: string[] }>,
 ): UnifiedToolDefinition {
   const parsedUrl = new URL(url)
-  const hostname = parsedUrl.hostname.replace(/^(www|api)\./, '')
   const pathname = parsedUrl.pathname.replace(/\/$/, '')
   const baseUrl = `${parsedUrl.protocol}//${parsedUrl.host}${pathname}`
 
-  const properties: Record<string, JsonSchemaProperty> = {
-    path: {
-      type: 'string',
-      description: `Optional sub-path to append AFTER the base path "${pathname}". For example "/1" to get item by ID, or "/search" for a search endpoint. Do NOT repeat "${pathname}" — it is already included. Omit this parameter to call the base URL as-is.`,
-    },
-  }
+  const properties: Record<string, JsonSchemaProperty> = {}
 
   for (const param of queryParams) {
     properties[param.name] = {
@@ -375,7 +369,7 @@ export function generateRawUrlToolDefinition(
 
   return {
     name: 'query_api',
-    description: `Query the REST API at ${hostname}. The base URL is ${baseUrl}. You can append path segments and set query parameters to filter or navigate the data.`,
+    description: `Fetch data from ${baseUrl}. This calls the exact endpoint — you can only adjust query parameters, not the URL path.`,
     inputSchema: {
       type: 'object',
       properties,

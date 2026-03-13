@@ -214,7 +214,7 @@ describe('generateRawUrlToolDefinition', () => {
     ])
     expect(def.name).toBe('query_api')
     expect(def.description).toContain('example.com')
-    expect(def.inputSchema.properties.path).toBeDefined()
+    expect(def.inputSchema.properties.path).toBeUndefined()
     expect(def.inputSchema.properties.page.default).toBe('1')
   })
 })

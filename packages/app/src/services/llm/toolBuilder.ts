@@ -97,9 +97,9 @@ export function buildSystemPrompt(url: string, spec?: ParsedAPI | null): string 
 
   return [
     `You are a helpful assistant that queries the REST API at ${hostname} on behalf of the user.`,
-    `You have a "query_api" tool that can fetch data from this API.`,
-    `The base URL is already set to ${parsedUrl.origin}${pathname} — do NOT repeat "${pathname}" in the path parameter.`,
-    `The path parameter is only for SUB-paths like "/1" or "/search". To call the base URL as-is, omit the path parameter entirely.`,
+    `You have a "query_api" tool that fetches data from: ${parsedUrl.origin}${pathname}`,
+    `The tool calls this exact endpoint — you can only adjust query parameters, not the URL path.`,
+    `If the data you need isn't available through query parameter filtering, explain what the user could try instead.`,
     `IMPORTANT: You MUST always call the tool to answer the user's question. NEVER answer from your own knowledge.`,
     `Your role is to fetch real-time data from the API, not to provide information you already know.`,
     `Even if you know the answer, call the tool so the UI updates with fresh data.`,
