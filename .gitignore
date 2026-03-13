@@ -39,3 +39,6 @@ data/
 *.db
 *.db-wal
 *.db-shm
+
+# Spec cache (local dev copy of spec files)
+spec-cache/

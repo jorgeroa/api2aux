@@ -10,7 +10,8 @@
     "db:generate": "drizzle-kit generate",
     "db:push": "drizzle-kit push",
     "db:studio": "drizzle-kit studio",
-    "ingest": "tsx scripts/ingest-csv.ts"
+    "ingest": "tsx scripts/ingest-csv.ts",
+    "upload-specs": "tsx scripts/upload-specs.ts"
   },
   "dependencies": {
     "@hono/node-server": "^1.19.11",
