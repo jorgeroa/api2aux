@@ -11,6 +11,7 @@ import type { ParsedAPI } from '@api2aux/semantic-analysis'
 import { parseUrlParameters } from '../urlParser/parser'
 import {
   sanitizeToolName,
+  generateToolName,
   generateToolDefinitions,
   generateRawUrlToolDefinition,
 } from '@api2aux/tool-utils'
@@ -66,6 +67,109 @@ function buildToolCatalog(spec: ParsedAPI): string | null {
   return lines.join('\n')
 }
 
+// ── Option 1: Smart System Prompt helpers ────────────────────────────
+
+const PAGINATION_PARAM_NAMES = new Set([
+  'page', 'limit', 'offset', 'per_page', 'perpage', 'page_size', 'pagesize',
+  'cursor', 'skip', 'take', 'after', 'before', 'count', 'size',
+])
+
+const SEARCH_PARAM_NAMES = new Set([
+  'q', 'query', 'search', 'filter', 'keyword', 'keywords', 'term', 'text',
+])
+
+/** Detect auth schemes and produce a system prompt hint. */
+function detectAuthContext(spec: ParsedAPI): string | null {
+  if (!spec.authSchemes || spec.authSchemes.length === 0) return null
+
+  const types = [...new Set(spec.authSchemes.map(s => s.authType).filter(Boolean))]
+  if (types.length === 0) return null
+
+  const typeLabels = types.map(t => {
+    switch (t) {
+      case 'bearer': return 'Bearer token'
+      case 'basic': return 'Basic (username/password)'
+      case 'apiKey': return 'API key'
+      case 'oauth2': return 'OAuth2'
+      case 'cookie': return 'Cookie-based'
+      default: return String(t)
+    }
+  })
+
+  return `Authentication: This API uses ${typeLabels.join(' / ')} auth. If API calls return 401/403, remind the user to configure authentication in the settings.`
+}
+
+/** Detect pagination parameters and produce a system prompt hint. */
+function detectPaginationHints(spec: ParsedAPI): string | null {
+  const paginationParams = new Map<string, { default?: unknown; maximum?: unknown }>()
+
+  for (const op of spec.operations) {
+    for (const param of op.parameters) {
+      const lower = param.name.toLowerCase()
+      if (PAGINATION_PARAM_NAMES.has(lower)) {
+        if (!paginationParams.has(param.name)) {
+          paginationParams.set(param.name, {
+            default: param.schema.default,
+            maximum: param.schema.maximum,
+          })
+        }
+      }
+    }
+  }
+
+  if (paginationParams.size === 0) return null
+
+  const details: string[] = []
+  for (const [name, info] of paginationParams) {
+    let detail = name
+    if (info.default !== undefined) detail += ` (default: ${info.default})`
+    if (info.maximum !== undefined) detail += ` (max: ${info.maximum})`
+    details.push(detail)
+  }
+
+  return `Pagination: This API uses ${details.join(', ')} for pagination. When users ask for "all data" or "more results", increase the limit or paginate through pages.`
+}
+
+/** Detect search/filter parameters and produce a system prompt hint. */
+function detectSearchHints(spec: ParsedAPI): string | null {
+  const searchOps: { toolName: string; searchParam: string; filterParams: string[] }[] = []
+
+  for (const op of spec.operations) {
+    let searchParam: string | null = null
+    const filterParams: string[] = []
+
+    for (const param of op.parameters) {
+      const lower = param.name.toLowerCase()
+      if (SEARCH_PARAM_NAMES.has(lower)) {
+        searchParam = param.name
+      } else if (param.in === 'query' && !PAGINATION_PARAM_NAMES.has(lower)) {
+        filterParams.push(param.name)
+      }
+    }
+
+    if (searchParam) {
+      searchOps.push({
+        toolName: generateToolName(op),
+        searchParam,
+        filterParams,
+      })
+    }
+  }
+
+  if (searchOps.length === 0) return null
+
+  const lines = ['Search capabilities:']
+  for (const { toolName, searchParam, filterParams } of searchOps) {
+    let line = `- ${toolName}: use '${searchParam}' for text search`
+    if (filterParams.length > 0) {
+      line += `. Filters: ${filterParams.join(', ')}`
+    }
+    lines.push(line)
+  }
+
+  return lines.join('\n')
+}
+
 /**
  * Build the system prompt that describes the API and instructs the LLM.
  */
@@ -83,13 +187,31 @@ export function buildSystemPrompt(url: string, spec?: ParsedAPI | null): string 
       `When the user asks a question, determine which API operation to call, execute it, then summarize the results concisely (2-3 sentences).`,
     ]
 
-    // Add tag-grouped tool catalog for navigation
-    const catalog = buildToolCatalog(spec)
-    if (catalog) {
-      return lines.join(' ') + '\n\n' + catalog
+    // Semantic enrichment sections
+    const sections: string[] = []
+
+    const authHint = detectAuthContext(spec)
+    if (authHint) sections.push(authHint)
+
+    const paginationHint = detectPaginationHints(spec)
+    if (paginationHint) sections.push(paginationHint)
+
+    const searchHint = detectSearchHints(spec)
+    if (searchHint) sections.push(searchHint)
+
+    // Navigation guidance for large APIs
+    if (spec.operations.length > 10) {
+      sections.push('Tip: When unsure which operation to use, start with list/search operations to explore available data, then drill into detail endpoints with specific IDs.')
     }
 
-    return lines.join(' ')
+    // Add tag-grouped tool catalog for navigation
+    const catalog = buildToolCatalog(spec)
+    if (catalog) sections.push(catalog)
+
+    const base = lines.join(' ')
+    return sections.length > 0
+      ? base + '\n\n' + sections.join('\n\n')
+      : base
   }
 
   const parsedUrl = new URL(url)
