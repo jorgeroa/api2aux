@@ -34,6 +34,9 @@ import { AuthError } from './services/api/errors'
 import type { BuiltRequest } from 'api-invoke'
 import 'react-loading-skeleton/dist/skeleton.css'
 
+/** Stable empty array to avoid re-render loops when passed as a prop */
+const EMPTY_PARAMS: [] = []
+
 /** Toolbar row shown during loading so the UI doesn't shift when data arrives */
 function ResultsToolbar() {
   return (
@@ -589,7 +592,7 @@ function App() {
                     endpoint={baseUrl}
                     parameters={
                       <ParameterForm
-                        parameters={[]}
+                        parameters={EMPTY_PARAMS}
                         rawUrl={currentUrl}
                         onSubmit={(values) => {
                           // Parse original URL to get original param keys
