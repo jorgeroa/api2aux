@@ -339,31 +339,20 @@ function registerToolsOnServer(
   fullResponse: boolean
 ): void {
   for (const tool of tools) {
-    const toolSchema = {
-      ...tool.inputSchema,
-      debug: z.boolean().optional().describe('Set to true to see the request URL, headers, and timing'),
-      full_response: z.boolean().optional().describe('Set to true to disable truncation and return the full response'),
-      dry_run: z.boolean().optional().describe('Set to true to preview the request without executing it'),
-    }
-
     const hasInputs = Object.keys(tool.inputSchema).length > 0
     const handler = isStreamingOperation(tool)
       ? createStreamingToolHandler(baseUrl, tool, bridgeAuth, debug, fullResponse)
       : createToolHandler(baseUrl, tool, bridgeAuth, debug, fullResponse)
 
-    if (hasInputs) {
-      server.registerTool(
-        tool.name,
-        { description: tool.description, inputSchema: toolSchema },
-        handler
-      )
-    } else {
-      server.registerTool(
-        tool.name,
-        { description: tool.description, inputSchema: { debug: toolSchema.debug, full_response: toolSchema.full_response, dry_run: toolSchema.dry_run } },
-        handler
-      )
+    // Cast to any to avoid TS2589 — dynamic schema from tool.inputSchema triggers excessively deep type instantiation
+    const inputSchema: any = {
+      ...(hasInputs ? tool.inputSchema : {}),
+      debug: z.boolean().optional().describe('Set to true to see the request URL, headers, and timing'),
+      full_response: z.boolean().optional().describe('Set to true to disable truncation and return the full response'),
+      dry_run: z.boolean().optional().describe('Set to true to preview the request without executing it'),
     }
+
+    server.registerTool(tool.name, { description: tool.description, inputSchema }, handler)
   }
 }
 
@@ -530,29 +519,18 @@ function registerGraphQLToolsOnServer(
   fullResponse: boolean
 ): void {
   for (const tool of tools) {
-    const toolSchema = {
-      ...tool.inputSchema,
+    const hasInputs = Object.keys(tool.inputSchema).length > 0
+    const handler = createGraphQLToolHandler(baseUrl, tool, bridgeAuth, debug, fullResponse)
+
+    // Cast to any to avoid TS2589 — dynamic schema from tool.inputSchema triggers excessively deep type instantiation
+    const inputSchema: any = {
+      ...(hasInputs ? tool.inputSchema : {}),
       debug: z.boolean().optional().describe('Set to true to see the request URL, headers, and timing'),
       full_response: z.boolean().optional().describe('Set to true to disable truncation and return the full response'),
       dry_run: z.boolean().optional().describe('Set to true to preview the request without executing it'),
     }
 
-    const hasInputs = Object.keys(tool.inputSchema).length > 0
-    const handler = createGraphQLToolHandler(baseUrl, tool, bridgeAuth, debug, fullResponse)
-
-    if (hasInputs) {
-      server.registerTool(
-        tool.name,
-        { description: tool.description, inputSchema: toolSchema },
-        handler
-      )
-    } else {
-      server.registerTool(
-        tool.name,
-        { description: tool.description, inputSchema: { debug: toolSchema.debug, full_response: toolSchema.full_response, dry_run: toolSchema.dry_run } },
-        handler
-      )
-    }
+    server.registerTool(tool.name, { description: tool.description, inputSchema }, handler)
   }
 }
 

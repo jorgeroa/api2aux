@@ -10,6 +10,7 @@ Three ways to experience any API: **smart rendering** with semantic field detect
 
 ```bash
 pnpm install
+pnpm link ../../../api-invoke   # use local api-invoke source (re-run after pnpm install)
 pnpm dev
 ```
 
