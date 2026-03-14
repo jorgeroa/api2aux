@@ -43,3 +43,6 @@ data/
 
 # Spec cache (local dev copy of spec files)
 spec-cache/
+
+# Claude Code local config
+.claude/
