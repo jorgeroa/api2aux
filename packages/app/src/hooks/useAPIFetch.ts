@@ -151,8 +151,9 @@ export function useAPIFetch() {
 
   const fetchAndInfer = async (url: string, options?: FetchOptions) => {
     try {
-      // Clear stale field configs from previous schema
+      // Clear previous results before starting a new fetch
       clearFieldConfigs()
+      clearSpec()
 
       const mode = useAppStore.getState().urlMode
 
@@ -179,7 +180,6 @@ export function useAPIFetch() {
       }
 
       // Endpoint mode or Auto mode with no URL match — fetch raw data
-      clearSpec()
       startFetch()
 
       const data = await fetchWithAuth(url, options)
