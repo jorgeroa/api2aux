@@ -1,4 +1,5 @@
 import type { Operation } from '@api2aux/semantic-analysis'
+import { Lock } from 'lucide-react'
 
 const METHOD_BADGE: Record<string, string> = {
   GET: 'text-green-700 bg-green-100 dark:text-green-400 dark:bg-green-950',
@@ -33,6 +34,9 @@ export function OperationItem({ operation, index, isSelected, onSelect, showName
         <span className={`px-1.5 py-0.5 text-xs font-semibold rounded uppercase ${methodBadgeClass(operation.method)}`}>
           {operation.method}
         </span>
+        {operation.security && operation.security.length > 0 && (
+          <Lock className="w-3 h-3 text-muted-foreground shrink-0" />
+        )}
         <code className="text-xs font-mono text-foreground">
           {showNameInsteadOfPath ? (operation.summary || operation.id) : operation.path}
         </code>
