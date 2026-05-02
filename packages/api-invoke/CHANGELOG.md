@@ -1,5 +1,31 @@
 # Changelog
 
+## 0.4.0 (2026-05-02)
+
+### Added
+
+- **`ExecuteOptions.onTokenRefresh`** — convenience field on `executeOperation` and `executeOperationStream`. When set, the executor auto-wraps `options.fetch` with the existing `withOAuthRefresh` middleware. On a 401 the executor refreshes the OAuth2 access token via the configured token endpoint, invokes `onPersist` with the new tokens, and retries the original request once with the new bearer.
+
+  ```ts
+  await executeOperation(baseUrl, op, args, {
+    auth: { type: AuthType.BEARER, token: currentAccessToken },
+    fetch: safeFetch,
+    onTokenRefresh: {
+      tokenUrl: 'https://auth.example.com/oauth/token',
+      refreshToken: storedRefreshToken,
+      clientId, clientSecret, scopes,
+      onPersist: async (tokens) => { await db.saveTokens(tokens) },
+    },
+  })
+  ```
+
+  Concurrent 401s within a single invocation deduplicate to one refresh round-trip. Cross-call dedup (e.g. across parallel `executeOperation` calls in the same process) is the caller's responsibility — each call constructs its own wrapper.
+
+### Notes
+
+- Non-breaking: `onTokenRefresh` is optional. Existing call sites without it behave exactly as before.
+- Reuses the already-exported `withOAuthRefresh` middleware and `OAuth2TokenResult` type — no new public exports.
+
 ## 0.3.0 (2026-04-08)
 
 ### Added

@@ -8,6 +8,8 @@ import { ContentType, HeaderName, HttpMethod } from './types'
 import { parseSSE } from './sse'
 import { buildUrl, extractHeaderParams, extractCookieParams } from './url-builder'
 import { injectAuth } from './auth'
+import type { OAuth2TokenResult } from './auth'
+import { withOAuthRefresh } from '../middleware/oauth-refresh'
 import {
   API_INVOKE_ERROR_NAME,
   ErrorKind,
@@ -37,6 +39,28 @@ export interface BuildRequestOptions {
 }
 
 /**
+ * OAuth2 refresh hook for {@link ExecuteOptions.onTokenRefresh}.
+ * When set, the executor wraps `options.fetch` with {@link withOAuthRefresh}: a 401 from the
+ * upstream triggers one refresh round-trip, `onPersist` is invoked, and the original request is
+ * retried once with the new bearer token. Concurrent 401s within a single executeOperation
+ * invocation deduplicate (one refresh per call). Cross-call dedup is the caller's responsibility.
+ */
+export interface OnTokenRefreshOptions {
+  /** OAuth2 token endpoint URL. */
+  tokenUrl: string
+  /** Refresh token to exchange for a new access token. */
+  refreshToken: string
+  /** OAuth2 client ID (if required by the token endpoint). */
+  clientId?: string
+  /** OAuth2 client secret (if required by the token endpoint). */
+  clientSecret?: string
+  /** OAuth2 scopes to request. */
+  scopes?: string[]
+  /** Called after a successful refresh so the caller can persist the new tokens. May be async. */
+  onPersist?: (tokens: OAuth2TokenResult) => void | Promise<void>
+}
+
+/**
  * Options for {@link executeOperation} and {@link executeOperationStream}.
  * Extends {@link BuildRequestOptions} with runtime and execution concerns.
  */
@@ -55,6 +79,8 @@ export interface ExecuteOptions extends BuildRequestOptions {
   redirect?: RequestInit['redirect']
   /** Extra headers to merge into the request. Applied after buildRequest, so they override spec-derived headers. */
   headers?: Record<string, string>
+  /** Optional OAuth2 refresh on 401. When set, `options.fetch` is auto-wrapped with {@link withOAuthRefresh}. */
+  onTokenRefresh?: OnTokenRefreshOptions
 }
 
 export type { BuiltRequest }
@@ -187,7 +213,24 @@ async function executeFetch(
   args: Record<string, unknown>,
   options: ExecuteOptions,
 ): Promise<{ response: Response; request: BuiltRequest; headers: Record<string, string>; elapsedMs: number }> {
-  const fetchFn = options.fetch ?? globalThis.fetch
+  const baseFetch = options.fetch ?? globalThis.fetch
+  // When onTokenRefresh is provided, wrap the fetch with the existing withOAuthRefresh middleware
+  // so a 401 from the upstream triggers a refresh round-trip + retry once with the new bearer.
+  // The wrapper's own dedup handles concurrent 401s within this invocation; cross-call dedup is
+  // the caller's responsibility (the wrapper is created fresh per invoke).
+  const fetchFn = options.onTokenRefresh
+    ? withOAuthRefresh(
+        {
+          tokenUrl: options.onTokenRefresh.tokenUrl,
+          refreshToken: options.onTokenRefresh.refreshToken,
+          clientId: options.onTokenRefresh.clientId,
+          clientSecret: options.onTokenRefresh.clientSecret,
+          scopes: options.onTokenRefresh.scopes,
+          onTokenRefresh: options.onTokenRefresh.onPersist,
+        },
+        baseFetch,
+      )
+    : baseFetch
 
   let { method, url, headers, body } = buildRequest(baseUrl, operation, args, {
     auth: options.auth,

@@ -51,7 +51,7 @@ export {
 
 // Execution
 export { executeOperation, executeRaw, executeOperationStream, executeRawStream, buildRequest } from './core/executor'
-export type { ExecuteOptions, BuildRequestOptions, BuiltRequest } from './core/executor'
+export type { ExecuteOptions, BuildRequestOptions, BuiltRequest, OnTokenRefreshOptions } from './core/executor'
 
 // SSE parser (advanced usage)
 export { parseSSE } from './core/sse'

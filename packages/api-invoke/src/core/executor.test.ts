@@ -1003,3 +1003,206 @@ describe('executeRawStream', () => {
     expect(init.method).toBe(HttpMethod.POST)
   })
 })
+
+// === ExecuteOptions.onTokenRefresh ===
+
+describe('onTokenRefresh', () => {
+  // Build a fetch that responds to two URL "channels":
+  //   - tokenUrl POST: returns the configured token-endpoint response
+  //   - everything else: returns the next pre-queued response (defaults to 200)
+  // Tracks call counts per channel so tests can assert exact retry/refresh behavior.
+  function buildRefreshFetch(args: {
+    tokenUrl: string
+    upstreamResponses: Response[]   // consumed in order for non-tokenUrl requests
+    tokenResponse: Response          // returned for any tokenUrl POST
+  }) {
+    let upstreamIdx = 0
+    const calls = { upstream: 0, token: 0 }
+    const fn = vi.fn(async (url: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
+      const target = typeof url === 'string' ? url : url.toString()
+      if (target === args.tokenUrl) {
+        calls.token++
+        return args.tokenResponse.clone()
+      }
+      calls.upstream++
+      const response = args.upstreamResponses[upstreamIdx]
+      if (!response) throw new Error(`buildRefreshFetch: ran out of upstream responses (call ${upstreamIdx + 1})`)
+      upstreamIdx++
+      return response.clone()
+    })
+    return { fn, calls }
+  }
+
+  function jsonResponse(status: number, body: unknown): Response {
+    return new Response(JSON.stringify(body), {
+      status, statusText: 'OK',
+      headers: { 'content-type': ContentType.JSON },
+    })
+  }
+
+  const tokenUrl = 'https://auth.example.com/oauth/token'
+
+  it('refreshes on 401 and retries once with new bearer (happy path)', async () => {
+    const { fn, calls } = buildRefreshFetch({
+      tokenUrl,
+      upstreamResponses: [
+        jsonResponse(401, { error: 'token expired' }),
+        jsonResponse(200, { id: '42', name: 'Alice' }),
+      ],
+      tokenResponse: jsonResponse(200, {
+        access_token: 'new-access', refresh_token: 'new-refresh', expires_in: 3600,
+      }),
+    })
+    const onPersist = vi.fn()
+
+    const result = await executeOperation(
+      baseUrl, getOp, { id: '42' },
+      {
+        fetch: fn,
+        auth: { type: AuthType.BEARER, token: 'old-access' },
+        onTokenRefresh: {
+          tokenUrl,
+          refreshToken: 'old-refresh',
+          clientId: 'cid', clientSecret: 'csec',
+          onPersist,
+        },
+      }
+    )
+
+    expect(result.status).toBe(200)
+    expect(result.data).toEqual({ id: '42', name: 'Alice' })
+    expect(calls.upstream).toBe(2)
+    expect(calls.token).toBe(1)
+    // Retry carries the new bearer (case-insensitive header match)
+    const [, retryInit] = fn.mock.calls[2] // call 0 = first upstream, 1 = token, 2 = retry
+    const retryHeaders = retryInit?.headers as Record<string, string>
+    const authHeader = Object.entries(retryHeaders).find(([k]) => k.toLowerCase() === 'authorization')?.[1]
+    expect(authHeader).toBe('Bearer new-access')
+    // onPersist fired once with the parsed tokens
+    expect(onPersist).toHaveBeenCalledTimes(1)
+    expect(onPersist).toHaveBeenCalledWith({
+      accessToken: 'new-access', refreshToken: 'new-refresh', expiresIn: 3600,
+    })
+  })
+
+  it('does not retry when refresh itself fails (token endpoint 4xx)', async () => {
+    const { fn, calls } = buildRefreshFetch({
+      tokenUrl,
+      upstreamResponses: [jsonResponse(401, { error: 'expired' })],
+      tokenResponse: jsonResponse(400, { error: 'invalid_grant' }),
+    })
+    const onPersist = vi.fn()
+
+    await expect(
+      executeOperation(
+        baseUrl, getOp, { id: '42' },
+        {
+          fetch: fn,
+          auth: { type: AuthType.BEARER, token: 'old-access' },
+          onTokenRefresh: {
+            tokenUrl, refreshToken: 'bad-refresh', onPersist,
+          },
+        }
+      )
+    ).rejects.toMatchObject({ kind: ErrorKind.AUTH })
+
+    // One upstream (the original 401), one token attempt, NO retry.
+    expect(calls.upstream).toBe(1)
+    expect(calls.token).toBe(1)
+    expect(onPersist).not.toHaveBeenCalled()
+  })
+
+  it('without onTokenRefresh: 401 propagates unchanged (no retry, no token POST)', async () => {
+    const fetch = mockFetch(401, { error: 'unauthorized' })
+    await expect(
+      executeOperation(baseUrl, getOp, { id: '42' }, {
+        fetch,
+        auth: { type: AuthType.BEARER, token: 'tok' },
+      })
+    ).rejects.toMatchObject({ kind: ErrorKind.AUTH })
+    expect(fetch).toHaveBeenCalledTimes(1)
+  })
+
+  it('passes through 200 response without any refresh attempt', async () => {
+    const { fn, calls } = buildRefreshFetch({
+      tokenUrl,
+      upstreamResponses: [jsonResponse(200, { ok: true })],
+      tokenResponse: jsonResponse(200, { access_token: 'never-used' }),
+    })
+
+    const result = await executeOperation(
+      baseUrl, getOp, { id: '42' },
+      {
+        fetch: fn,
+        auth: { type: AuthType.BEARER, token: 'tok' },
+        onTokenRefresh: { tokenUrl, refreshToken: 'rt' },
+      }
+    )
+
+    expect(result.status).toBe(200)
+    expect(calls.upstream).toBe(1)
+    expect(calls.token).toBe(0)
+  })
+
+  it('onPersist throwing does not break the retry (warning is logged)', async () => {
+    const { fn } = buildRefreshFetch({
+      tokenUrl,
+      upstreamResponses: [
+        jsonResponse(401, { error: 'expired' }),
+        jsonResponse(200, { ok: true }),
+      ],
+      tokenResponse: jsonResponse(200, { access_token: 'new', expires_in: 60 }),
+    })
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
+
+    const result = await executeOperation(
+      baseUrl, getOp, { id: '42' },
+      {
+        fetch: fn,
+        auth: { type: AuthType.BEARER, token: 'old' },
+        onTokenRefresh: {
+          tokenUrl, refreshToken: 'rt',
+          onPersist: () => { throw new Error('db down') },
+        },
+      }
+    )
+
+    expect(result.status).toBe(200)
+    expect(warnSpy).toHaveBeenCalled()
+    warnSpy.mockRestore()
+  })
+
+  it('passes scopes to the token endpoint when provided', async () => {
+    const { fn } = buildRefreshFetch({
+      tokenUrl,
+      upstreamResponses: [
+        jsonResponse(401, { error: 'expired' }),
+        jsonResponse(200, { ok: true }),
+      ],
+      tokenResponse: jsonResponse(200, { access_token: 'new', expires_in: 3600 }),
+    })
+
+    await executeOperation(
+      baseUrl, getOp, { id: '42' },
+      {
+        fetch: fn,
+        auth: { type: AuthType.BEARER, token: 'old' },
+        onTokenRefresh: {
+          tokenUrl,
+          refreshToken: 'rt',
+          clientId: 'cid', clientSecret: 'csec',
+          scopes: ['read', 'write'],
+        },
+      }
+    )
+
+    // Find the token-endpoint call and inspect the body.
+    const tokenCall = fn.mock.calls.find(([url]) => url === tokenUrl)
+    expect(tokenCall).toBeDefined()
+    const body = tokenCall?.[1]?.body as string
+    const params = new URLSearchParams(body)
+    expect(params.get('grant_type')).toBe('refresh_token')
+    expect(params.get('refresh_token')).toBe('rt')
+    expect(params.get('scope')).toBe('read write')
+  })
+})
