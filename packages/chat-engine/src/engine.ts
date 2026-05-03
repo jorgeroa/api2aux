@@ -172,6 +172,38 @@ export class ChatEngine {
     }
   }
 
+  /**
+   * Resume a tool call whose execution was deferred for an out-of-band step
+   * (e.g., an inline-login form completes after the executor returned a
+   * placeholder result). Replaces the existing `tool` message in history with
+   * the resolved data, then runs Phase B (focus/merge → text response) so the
+   * LLM produces a fresh assistant reply grounded in the real data instead of
+   * the placeholder. No new tool-call round happens — the same toolCall is
+   * being completed, not retried.
+   *
+   * The original turn's user message is recovered from history. The original
+   * `toolName` and `toolArgs` are recovered from the assistant tool_calls
+   * message that issued this toolCall, so the focus/merge step has the same
+   * inputs it would have had if `data` were returned synchronously.
+   *
+   * Throws if no `tool` message with the given tool_call_id exists, or if the
+   * matching assistant tool_calls message can't be found.
+   */
+  async resumeWithToolResult(
+    toolCallId: string,
+    data: unknown,
+    onEvent: ChatEngineEventHandler,
+  ): Promise<ChatEngineResponse> {
+    if (this.busy) throw new Error('ChatEngine: resumeWithToolResult is already in progress')
+    this.busy = true
+
+    try {
+      return await this.runResume(toolCallId, data, onEvent)
+    } finally {
+      this.busy = false
+    }
+  }
+
   private async runConversation(
     text: string,
     onEvent: ChatEngineEventHandler,
@@ -362,22 +394,33 @@ export class ChatEngine {
 
     // ── Phase B: Focus/merge + text response ──
     // Only reached when collectedResults.length > 0 (break condition above).
+    return await this.runPhaseB(collectedResults, text, emit)
+  }
 
+  /**
+   * Phase B: focus/merge collected tool results, compress history, generate the
+   * final assistant text. Shared by `sendMessage` (after Phase A's tool loop)
+   * and `resumeWithToolResult` (after a deferred tool call's data lands).
+   *
+   * Pre-conditions: collectedResults.length > 0; for each result the matching
+   * `tool` message is already present in `this.history`.
+   */
+  private async runPhaseB(
+    collectedResults: ToolResultEntry[],
+    userMessage: string,
+    emit: ChatEngineEventHandler,
+  ): Promise<ChatEngineResponse> {
     // Step 1: Focus/merge the collected tool results
     emit({ type: ChatEventType.DataProcessing })
 
     let structured: StructuredResponse
     try {
-      structured = await this.buildStructuredResponse(collectedResults, text, emit)
+      structured = await this.buildStructuredResponse(collectedResults, userMessage, emit)
     } catch (err) {
       const errorMsg = err instanceof Error ? err.message : String(err)
       console.error('[chat-engine] buildStructuredResponse failed:', errorMsg)
       emit({ type: ChatEventType.Error, error: `Data processing failed (showing raw results): ${errorMsg}` })
-      structured = {
-        strategy: MergeStrategy.Array,
-        sources: collectedResults.map(r => ({ toolName: r.toolName, toolArgs: r.toolArgs })),
-        data: collectedResults.map(r => r.data),
-      }
+      structured = this.buildArrayFallback(collectedResults)
     }
 
     emit({ type: ChatEventType.StructuredReady, structured })
@@ -437,6 +480,122 @@ export class ChatEngine {
       structured,
       history: [...this.history],
     }
+  }
+
+  /**
+   * Body of `resumeWithToolResult`. Replaces the prior `tool` message's content
+   * with the resolved data, recovers the original toolName/toolArgs and the
+   * turn's user message, and re-enters Phase B as if the data had been the
+   * executor's original return value.
+   */
+  private async runResume(
+    toolCallId: string,
+    data: unknown,
+    onEvent: ChatEngineEventHandler,
+  ): Promise<ChatEngineResponse> {
+    const emit: ChatEngineEventHandler = (event) => {
+      try { onEvent(event) } catch (err) {
+        console.error('[chat-engine] onEvent handler threw:', err instanceof Error ? err.stack ?? err.message : String(err))
+      }
+    }
+
+    // Locate the existing tool message for this toolCallId. We expect exactly one
+    // (the placeholder pushed by Phase A).
+    const toolMsgIndex = this.history.findIndex(
+      (m) => m.role === MessageRole.Tool && m.tool_call_id === toolCallId,
+    )
+    if (toolMsgIndex === -1) {
+      throw new Error(
+        `ChatEngine.resumeWithToolResult: no tool message found for tool_call_id="${toolCallId}". ` +
+        `Either the toolCall already completed in a fresh turn or the id is wrong.`,
+      )
+    }
+
+    // Walk backward to find the assistant tool_calls message that issued this
+    // tool_call_id — it carries the original function name + arguments string.
+    let assistantTcIndex = -1
+    let originalToolName = ''
+    let originalToolArgsRaw = ''
+    for (let i = toolMsgIndex - 1; i >= 0; i--) {
+      const msg = this.history[i]!
+      if (msg.role === MessageRole.Assistant && msg.tool_calls) {
+        const tc = msg.tool_calls.find((c) => c.id === toolCallId)
+        if (tc) {
+          assistantTcIndex = i
+          originalToolName = tc.function.name
+          originalToolArgsRaw = tc.function.arguments
+          break
+        }
+      }
+    }
+    if (assistantTcIndex === -1) {
+      throw new Error(
+        `ChatEngine.resumeWithToolResult: no assistant tool_calls message references tool_call_id="${toolCallId}".`,
+      )
+    }
+
+    // Recover the user message text that started this turn — the most recent
+    // user message before the assistant tool_calls.
+    let userMessage = ''
+    for (let i = assistantTcIndex - 1; i >= 0; i--) {
+      const msg = this.history[i]!
+      if (msg.role === MessageRole.User) {
+        userMessage = msg.content
+        break
+      }
+    }
+
+    let toolArgs: Record<string, unknown>
+    try {
+      toolArgs = originalToolArgsRaw.length > 0
+        ? (JSON.parse(originalToolArgsRaw) as Record<string, unknown>)
+        : {}
+    } catch {
+      // The original args were unparseable — Phase A would have surfaced an
+      // error tool result, not a placeholder, so this is unexpected. Fall back
+      // to an empty object so Phase B can still run.
+      toolArgs = {}
+    }
+
+    // Replace the placeholder tool message in-place with the resolved data.
+    // Use the same truncation pipeline as the Phase A executor path so the
+    // serialized form is identical to a synchronous result.
+    const truncatedResult = truncateToolResult(data, this.truncationLimit)
+    this.history[toolMsgIndex] = {
+      role: MessageRole.Tool,
+      content: truncatedResult,
+      tool_call_id: toolCallId,
+    }
+
+    // Drop any assistant text that may have been appended after the placeholder
+    // in this turn (e.g., the "I'm asking you to log in" acknowledgment from
+    // the prior Phase B). Keep history strictly: user → assistant tool_calls →
+    // tool result. The fresh Phase B will append a new assistant text.
+    if (this.history.length > toolMsgIndex + 1) {
+      const trailing = this.history.slice(toolMsgIndex + 1)
+      const allAssistantText = trailing.every(
+        (m) => m.role === MessageRole.Assistant && m.content !== null && !m.tool_calls,
+      )
+      if (allAssistantText) this.history.length = toolMsgIndex + 1
+    }
+
+    const collectedResults: ToolResultEntry[] = [{
+      toolName: originalToolName,
+      toolArgs,
+      data,
+      summary: summarizeToolResult(data, originalToolName, toolArgs),
+    }]
+
+    emit({
+      type: ChatEventType.ToolCallResult,
+      toolCallId,
+      toolName: originalToolName,
+      toolArgs,
+      data,
+      summary: collectedResults[0]!.summary,
+    })
+
+    return await this.runPhaseB(collectedResults, userMessage, emit)
   }
 
   /** Build an Array-strategy fallback response (no focus/merge). */
