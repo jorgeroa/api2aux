@@ -307,6 +307,27 @@ describe('executeRaw', () => {
     })
     expect(fetch).toHaveBeenCalledTimes(1)
   })
+
+  it('exposes Set-Cookie response headers via setCookies (cookie-based login responses)', async () => {
+    // Almundo-style: login returns `{}` body but two Set-Cookie lines. This is the entry point
+    // platform-api uses to perform login (auth-challenge.service runLoginEndpoint).
+    const responseHeaders = new Headers()
+    responseHeaders.append('Set-Cookie', 'id_token=jwt-here; Path=/; Secure')
+    responseHeaders.append('Set-Cookie', 'refresh_token=uuid-here; Path=/; Secure')
+    responseHeaders.set('content-type', 'application/json')
+    const fetch = vi.fn().mockResolvedValue(
+      new Response('{}', { status: 200, headers: responseHeaders })
+    )
+    const result = await executeRaw('https://example.com/login', {
+      method: 'POST',
+      body: JSON.stringify({ user: 'a', pass: 'b' }),
+      fetch,
+    })
+    expect(result.status).toBe(200)
+    expect(result.setCookies).toHaveLength(2)
+    expect(result.setCookies.some((c) => c.startsWith('id_token='))).toBe(true)
+    expect(result.setCookies.some((c) => c.startsWith('refresh_token='))).toBe(true)
+  })
 })
 
 // === ExecutionResult ===
@@ -347,6 +368,59 @@ describe('ExecutionResult', () => {
     )
     expect(result.contentType).toBe('text/xml')
     expect(result.data).toBe('<root/>')
+  })
+
+  it('exposes every Set-Cookie line via setCookies (not collapsed by Headers.get)', async () => {
+    // Fetch's Headers object collapses repeated headers when read via .get/.forEach,
+    // so `result.headers['set-cookie']` would only carry one value. The new `setCookies`
+    // array uses Headers.getSetCookie() (Node 20+) and preserves every line.
+    const responseHeaders = new Headers()
+    responseHeaders.append('Set-Cookie', 'id_token=abc; Path=/; Secure')
+    responseHeaders.append('Set-Cookie', 'refresh_token=def; Path=/; Secure')
+    responseHeaders.set('content-type', 'application/json')
+    const fetch = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify({}), { status: 200, headers: responseHeaders })
+    )
+    const result = await executeOperation(
+      baseUrl, { ...getOp, parameters: [] }, {}, { fetch }
+    )
+    expect(result.setCookies).toHaveLength(2)
+    expect(result.setCookies[0]).toContain('id_token=abc')
+    expect(result.setCookies[1]).toContain('refresh_token=def')
+  })
+
+  it('returns empty setCookies when the response has none', async () => {
+    const fetch = mockFetch(200, { ok: true })
+    const result = await executeOperation(
+      baseUrl, { ...getOp, parameters: [] }, {}, { fetch }
+    )
+    expect(result.setCookies).toEqual([])
+  })
+
+  it('falls back to a single-value setCookies entry when getSetCookie() is unavailable', async () => {
+    // Older runtimes (or polyfilled Headers) only expose .get()/.forEach(), which collapse
+    // repeated Set-Cookie lines into one. We still surface that single value rather than dropping it.
+    const fakeHeaders = {
+      forEach: (cb: (value: string, key: string) => void) => {
+        cb('application/json', 'content-type')
+        cb('id_token=abc', 'set-cookie')
+      },
+      get: (name: string) => (name.toLowerCase() === 'content-type' ? 'application/json' : null),
+      // No getSetCookie — the fallback path should engage.
+    }
+    const fetch = vi.fn().mockResolvedValue({
+      status: 200,
+      ok: true,
+      statusText: 'OK',
+      headers: fakeHeaders,
+      clone() { return this },
+      json: async () => ({}),
+      text: async () => '{}',
+    })
+    const result = await executeOperation(
+      baseUrl, { ...getOp, parameters: [] }, {}, { fetch }
+    )
+    expect(result.setCookies).toEqual(['id_token=abc'])
   })
 })
 

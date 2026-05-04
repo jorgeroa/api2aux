@@ -291,8 +291,10 @@ export interface ExecutionResult {
   data: unknown
   /** Response content type from the Content-Type header (e.g. 'application/json', 'text/xml'). */
   contentType: string
-  /** Response headers as a flat key-value map. */
+  /** Response headers as a flat key-value map. Multi-valued headers (notably `Set-Cookie`) are not preserved here — see `setCookies`. */
   headers: Record<string, string>
+  /** Raw `Set-Cookie` response header values, one entry per `Set-Cookie` line. Empty array when none. Use this rather than `headers['set-cookie']` (which collapses multiple values into one). */
+  setCookies: string[]
   /** The request that was sent, useful for debugging and logging. */
   request: BuiltRequest
   /** Request duration in milliseconds (from send to response headers received, before body parsing). */

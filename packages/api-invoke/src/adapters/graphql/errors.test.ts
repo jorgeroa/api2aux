@@ -9,6 +9,7 @@ function makeResult(data: unknown): ExecutionResult {
     data,
     contentType: 'application/json',
     headers: {},
+    setCookies: [],
     request: { method: 'POST', url: 'https://api.example.com/graphql', headers: {} },
     elapsedMs: 50,
   }

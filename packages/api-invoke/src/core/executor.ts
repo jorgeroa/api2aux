@@ -212,7 +212,7 @@ async function executeFetch(
   operation: Operation,
   args: Record<string, unknown>,
   options: ExecuteOptions,
-): Promise<{ response: Response; request: BuiltRequest; headers: Record<string, string>; elapsedMs: number }> {
+): Promise<{ response: Response; request: BuiltRequest; headers: Record<string, string>; setCookies: string[]; elapsedMs: number }> {
   const baseFetch = options.fetch ?? globalThis.fetch
   // When onTokenRefresh is provided, wrap the fetch with the existing withOAuthRefresh middleware
   // so a 401 from the upstream triggers a refresh round-trip + retry once with the new bearer.
@@ -331,13 +331,20 @@ async function executeFetch(
     }
   }
 
-  // Collect response headers
+  // Collect response headers (single-valued; multi-valued headers like Set-Cookie are collapsed here — see setCookies below)
   const responseHeaders: Record<string, string> = {}
   response.headers.forEach((value, key) => {
     responseHeaders[key] = value
   })
 
-  return { response, request: { method, url, headers, body }, headers: responseHeaders, elapsedMs }
+  // Collect Set-Cookie separately because Headers.forEach / .get collapse repeated header lines.
+  // Prefer the standard getSetCookie() (Node 20+, modern browsers); fall back to the single collapsed value.
+  const headersWithGetSetCookie = response.headers as Headers & { getSetCookie?: () => string[] }
+  const setCookies: string[] = typeof headersWithGetSetCookie.getSetCookie === 'function'
+    ? headersWithGetSetCookie.getSetCookie()
+    : (responseHeaders['set-cookie'] ? [responseHeaders['set-cookie']] : [])
+
+  return { response, request: { method, url, headers, body }, headers: responseHeaders, setCookies, elapsedMs }
 }
 
 /**
@@ -357,7 +364,7 @@ export async function executeOperation(
   args: Record<string, unknown>,
   options: ExecuteOptions = {},
 ): Promise<ExecutionResult> {
-  const { response, request, headers: responseHeaders, elapsedMs } = await executeFetch(baseUrl, operation, args, options)
+  const { response, request, headers: responseHeaders, setCookies, elapsedMs } = await executeFetch(baseUrl, operation, args, options)
   const { method, url, headers, body } = request
 
   // Parse response body based on content type
@@ -410,6 +417,7 @@ export async function executeOperation(
     data,
     contentType,
     headers: responseHeaders,
+    setCookies,
     request: { method, url, headers, body },
     elapsedMs,
   }
